@@ -1,0 +1,27 @@
+{
+  "name": "yearwego-reader",
+  "version": "1.0.0",
+  "description": "Open a YearWeGo backup on your own computer, offline, with your passphrase.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && node scripts/finish-build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fflate": "0.8.3",
+    "libsodium-wrappers-sumo": "0.8.4",
+    "sql.js": "1.14.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "@types/sql.js": "1.4.11",
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vite-plugin-singlefile": "2.3.3",
+    "vitest": "5.0.5"
+  }
+}

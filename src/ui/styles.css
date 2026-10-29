@@ -1,0 +1,296 @@
+:root {
+  --bg: #f4f3ff;
+  --surface: #ffffff;
+  --text: #25263d;
+  --muted: #5b5c78;
+  --border: #d6d4ee;
+  --accent-text: #167552;
+  --button-bg: #3cd89f;
+  --button-text: #03001d;
+  --secondary-bg: transparent;
+  --danger: #b42318;
+  --warning-bg: #fff4d6;
+  --warning-text: #5c4300;
+  --focus: #167552;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #03001d;
+    --surface: #0d0a2e;
+    --text: #e8e7ff;
+    --muted: #a9a7d4;
+    --border: #2b2858;
+    --accent-text: #3cd89f;
+    --danger: #ff9b9b;
+    --warning-bg: #2c2410;
+    --warning-text: #ffe2a3;
+    --focus: #3cd89f;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+h1 {
+  font-size: 1.9rem;
+  line-height: 1.2;
+  margin: 0 0 8px;
+}
+
+h2 {
+  font-size: 1.25rem;
+  margin: 40px 0 12px;
+}
+
+h3 {
+  font-size: 1.05rem;
+  margin: 0 0 10px;
+}
+
+p {
+  margin: 0 0 12px;
+}
+
+.lede {
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+.note {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 0 24px;
+  background: var(--surface);
+}
+
+.note.prominent {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border-color: transparent;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+form {
+  display: grid;
+  gap: 20px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+label {
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+input[type='text'],
+input[type='password'],
+input[type='file'] {
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+input[type='file'] {
+  padding: 8px;
+}
+
+.show-passphrase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  min-height: 44px;
+}
+
+.show-passphrase input {
+  width: 20px;
+  height: 20px;
+}
+
+button,
+.button {
+  font: inherit;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: var(--button-bg);
+  color: var(--button-text);
+}
+
+button.secondary {
+  background: var(--secondary-bg);
+  color: var(--accent-text);
+  border-color: var(--border);
+}
+
+button.link {
+  background: none;
+  border: none;
+  padding: 10px 0;
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.status {
+  min-height: 1.5em;
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0 8px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  margin: 0 0 12px;
+}
+
+.card.current {
+  border-color: var(--accent-text);
+}
+
+.question {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.words {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.words.missing {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.entry + .entry,
+.entry + .outcome,
+.outcome + .entry {
+  margin-top: 14px;
+}
+
+.outcome {
+  font-weight: 700;
+  color: var(--accent-text);
+}
+
+.outcome.muted {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 8px;
+}
+
+.player {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.player audio {
+  width: 100%;
+  max-width: 420px;
+}
+
+.problems {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 16px 0;
+}
+
+.problems ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  margin-top: 48px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+[tabindex='-1']:focus {
+  outline: none;
+}

@@ -1,0 +1,103 @@
+{
+  "format": "yearwego-backup",
+  "backup_format_version": 1,
+  "spec": "docs/archive-format/v1.md",
+  "encoding": "Byte strings are lowercase hex. Text is UTF-8.",
+  "passphrase": "acorn-anthem-bronze-canopy-harbor-lantern-quilt-velvet",
+  "archive": {
+    "header_json": "{\n  \"salt\": \"EBESExQVFhcYGRobHB0eHw\",\n  \"backupFormatVersion\": 1,\n  \"kdfParams\": {\n    \"keyLength\": 32,\n    \"opsLimit\": 3,\n    \"memLimit\": 268435456,\n    \"algorithm\": 2\n  }\n}",
+    "salt_hex": "101112131415161718191a1b1c1d1e1f",
+    "salt_base64": "EBESExQVFhcYGRobHB0eHw",
+    "kdf_params": {
+      "keyLength": 32,
+      "opsLimit": 3,
+      "memLimit": 268435456,
+      "algorithm": 2
+    },
+    "key_hex": "6c2ea79d1436cd1e5826b057ea8f112724ca7a2e95f764f41ba67bde367bd7c0",
+    "aad": "v1|backup.archive|1|EBESExQVFhcYGRobHB0eHw",
+    "nonce_hex": "202122232425262728292a2b2c2d2e2f3031323334353637",
+    "plaintext_hex": "504b207374616e642d696e20666f722074686520696e6e6572207a69703b20616e79206279746573207365616c207468652073616d65207761792e",
+    "sealed_hex": "5957473101202122232425262728292a2b2c2d2e2f3031323334353637c7aef7297384ad3c5e68dd9dc0c637926b00c378e5d0f1393e8698e3efedc13be35dc629789ebf6bfc91caf71a00fa072b224c39127a00fa5a17ea6b220e5e338b17c0f925aef79d587ec5"
+  },
+  "key_backup": {
+    "crypto_key_id": "019a3000-0000-7000-8000-000000000001",
+    "kdf_salt_hex": "404142434445464748494a4b4c4d4e4f",
+    "kdf_params_json": "{\"keyLength\":32,\"opsLimit\":3,\"memLimit\":268435456,\"algorithm\":2}",
+    "key_hex": "0b2e5a06d987a78fffb303e708b01f09fe9801ff90ba3a46716d6d1e88f943bc",
+    "aad": "v1|crypto_key_backup|019a3000-0000-7000-8000-000000000001",
+    "nonce_hex": "505152535455565758595a5b5c5d5e5f6061626364656667",
+    "encrypted_key_hex": "6403d33e559f66480785949a8c44c254b4744897195cbf4184846665be6fd199767f0748af379e269de73c5e9dc5a2c7",
+    "root_key_hex": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+    "root_key_checksum_hex": "f87de0ab9ed6d2f6"
+  },
+  "data_encryption_key": {
+    "crypto_key_id": "019a3000-0000-7000-8000-000000000002",
+    "root_key_hex": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+    "aad": "v1|crypto_key.data_encryption_key|019a3000-0000-7000-8000-000000000002",
+    "nonce_hex": "606162636465666768696a6b6c6d6e6f7071727374757677",
+    "encrypted_key_hex": "71a1b09714d8ea5d45334900f9f3ef5dba83a06c435f7e10100bfaa91f43ce5120982bbae8430179a6f8202ea01b86b3",
+    "dek_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+    "checksum_hex": "37603bc50fe7c90a"
+  },
+  "transcript": {
+    "transcript_id": "019a3000-0000-7000-8000-000000000004",
+    "dek_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+    "aad": "v1|transcript.text|019a3000-0000-7000-8000-000000000004",
+    "text": "Today, I’ll run three miles before work.",
+    "text_nonce_hex": "707172737475767778797a7b7c7d7e7f8081828384858687",
+    "encrypted_text_hex": "f6c023b01aed77f7c921cdd4a42fd25c17c467d9878b9a4b11ba3527140eef8b1222983673b61f3e451b2690b775148050624ccb49e9f76cedee"
+  },
+  "audio": {
+    "recording_id": "019a3000-0000-7000-8000-000000000003",
+    "crypto_key_id": "019a3000-0000-7000-8000-000000000002",
+    "dek_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+    "file_nonce_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+    "sample_rate": 44100,
+    "channels": 1,
+    "codec": 1,
+    "header_hex": "5957474101c0c1c2c3c4c5c6c7c8c9cacbcccdcecf44ac00000101",
+    "chunks": [
+      {
+        "index": 0,
+        "final": false,
+        "levels_hex": "0c28c8",
+        "frames_hex": "fff15040017ffc01402007",
+        "nonce_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf0000000000000000",
+        "aad": "v1|recording.audio.chunk|019a3000-0000-7000-8000-000000000003|019a3000-0000-7000-8000-000000000002|c0c1c2c3c4c5c6c7c8c9cacbcccdcecf|44100|1|0|more",
+        "framed_hex": "1f00000000527f083226fb80bcaad21f1909ac9fffe4715e740cd90b11f7a10a4fdb9225"
+      },
+      {
+        "index": 1,
+        "final": false,
+        "levels_hex": "5a",
+        "frames_hex": "fff15040017ffc01402007fff15040017ffc01402007",
+        "nonce_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf0100000000000000",
+        "aad": "v1|recording.audio.chunk|019a3000-0000-7000-8000-000000000003|019a3000-0000-7000-8000-000000000002|c0c1c2c3c4c5c6c7c8c9cacbcccdcecf|44100|1|1|more",
+        "framed_hex": "2800000000cbd0678c965dc8c8efa7fdcc5c572b930a018f28de063342ae58b1022b48035a86c0dfba95cdc593"
+      },
+      {
+        "index": 2,
+        "final": true,
+        "levels_hex": "",
+        "frames_hex": "",
+        "nonce_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf0200000000000000",
+        "aad": "v1|recording.audio.chunk|019a3000-0000-7000-8000-000000000003|019a3000-0000-7000-8000-000000000002|c0c1c2c3c4c5c6c7c8c9cacbcccdcecf|44100|1|2|final",
+        "framed_hex": "110000000164156fa4ee17afc37fbc4aefb75ecce5ed"
+      }
+    ],
+    "file_hex": "5957474101c0c1c2c3c4c5c6c7c8c9cacbcccdcecf44ac000001011f00000000527f083226fb80bcaad21f1909ac9fffe4715e740cd90b11f7a10a4fdb92252800000000cbd0678c965dc8c8efa7fdcc5c572b930a018f28de063342ae58b1022b48035a86c0dfba95cdc593110000000164156fa4ee17afc37fbc4aefb75ecce5ed",
+    "audio_hex": "fff15040017ffc01402007fff15040017ffc01402007fff15040017ffc01402007",
+    "levels_hex": "0c28c85a"
+  },
+  "checksums": {
+    "entry_checksum": {
+      "input_hex": "504b207374616e642d696e20666f722074686520696e6e6572207a69703b20616e79206279746573207365616c207468652073616d65207761792e",
+      "blake2b_8_hex": "201fed11f6dc4d38"
+    },
+    "manifest_hash": {
+      "manifest_without_hash_json": "{\"backup_id\":\"00000000-0000-4000-8000-000000000000\",\"entries\":[{\"path\":\"recordings/a.aac.encrypted\",\"type\":\"application/octet-stream\",\"size\":3}]}",
+      "blake2b_32_hex": "bfdaededf650e392f9fcb0c3ec8f237aa58dfea8e12c80d80ab5fa0290874c70"
+    }
+  }
+}
