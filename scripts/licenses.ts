@@ -44,7 +44,7 @@ function noticeText(directory: string, name: string): string {
   return files.map((file) => readFileSync(join(directory, file), 'utf8').trim()).join('\n\n');
 }
 
-function packageDirectory(name: string, from: string): string {
+export function packageDirectory(name: string, from: string = ROOT): string {
   for (let directory = from; ; directory = dirname(directory)) {
     const candidate = join(directory, 'node_modules', name);
     if (existsSync(join(candidate, 'package.json'))) return candidate;
