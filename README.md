@@ -25,7 +25,7 @@ If your backup was made before October 2, 2026, right after you replaced a lost 
 
 The SHA-256 of `dist/yearwego-reader.html` for this version is:
 
-<!-- sha256 -->`b65b29a7447634f9c55a75334b0ca119ce7abc957dc54e1fe12d89f85cc9fc68`<!-- /sha256 -->
+<!-- sha256 -->`c99aa06782dbb6a55fbf3d2e8d4ec53db536306771155c3052ec29fdf300b19f`<!-- /sha256 -->
 
 On a Mac or Linux: `shasum -a 256 yearwego-reader.html`. On Windows: `certutil -hashfile yearwego-reader.html SHA256`.
 
@@ -48,7 +48,7 @@ npm run build   # type-checks, builds dist/yearwego-reader.html, and writes its 
 - `tests/` runs the core in Node against `spec/vectors.json` and the archives in `fixtures/`.
 - `fixtures/` holds golden archives made by the app’s own backup code with made-up entries and the passphrase `TEST`. They contain no one’s real data.
 
-Pinned libraries: libsodium.js (sumo build, for Argon2id), sql.js (SQLite in WebAssembly), and fflate (zip).
+Pinned libraries: libsodium.js (sumo build, for Argon2id), sql.js (SQLite in WebAssembly), and fflate (zip). The build reads each library’s own license file and puts the texts in the page, under **Licenses** at the foot, and in a comment at the top of the file; it fails if anything bundled has no license notice.
 
 ## License
 
