@@ -13,6 +13,7 @@ import {
   type ProgressStep,
   type UnsealedArchive,
 } from '../core';
+import licenses from 'virtual:licenses';
 import { h, nextPaint } from './dom';
 import { loadSqlInBrowser } from './sql-browser';
 import './styles.css';
@@ -421,4 +422,31 @@ function renderLogbook(backup: OpenedBackup) {
   heading.focus();
 }
 
+function licensesFooter(): HTMLElement {
+  return h(
+    'footer',
+    { class: 'licenses' },
+    h(
+      'details',
+      {},
+      h('summary', {}, 'Licenses'),
+      h(
+        'p',
+        {},
+        'YearWeGo Reader and the libraries built into this page, each with its license. sql.js includes SQLite, which is in the public domain.',
+      ),
+      ...licenses.map((notice) =>
+        h(
+          'section',
+          {},
+          h('h3', {}, `${notice.title} ${notice.version}`),
+          h('p', { class: 'meta' }, notice.license),
+          h('pre', {}, notice.text),
+        ),
+      ),
+    ),
+  );
+}
+
+app.after(licensesFooter());
 renderStart();
