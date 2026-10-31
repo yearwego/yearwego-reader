@@ -1,12 +1,11 @@
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { defineConfig, type Plugin } from 'vitest/config';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { licenseComment, licenseNotices, packageNameOf } from './scripts/licenses.ts';
+import { embeddedWasm, findWasmBase64, sqlWasm, wasmComment } from './scripts/wasm.ts';
 
-// connect-src 'none' is what makes “nothing leaves this computer” enforceable: the page cannot
-// fetch, post, or open a socket. 'wasm-unsafe-eval' lets libsodium and SQLite compile their
-// WebAssembly; nothing needs plain 'unsafe-eval'.
+// connect-src 'none' blocks fetch, XHR, beacons, and sockets. No CSP directive can stop a script
+// navigating the tab, so the reader is also written never to navigate (README, How to audit).
+// 'wasm-unsafe-eval' lets libsodium and SQLite compile their WebAssembly; nothing needs plain 'unsafe-eval'.
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'none'",
   "script-src 'unsafe-inline' 'wasm-unsafe-eval'",
@@ -43,8 +42,7 @@ function inlineSqlWasm(): Plugin {
     resolveId: (id) => (id === SQL_WASM_MODULE ? resolvedId : null),
     load: (id) => {
       if (id !== resolvedId) return null;
-      const wasmPath = createRequire(import.meta.url).resolve('sql.js/dist/sql-wasm-browser.wasm');
-      return `export default ${JSON.stringify(readFileSync(wasmPath).toString('base64'))};`;
+      return `export default ${JSON.stringify(sqlWasm().bytes.toString('base64'))};`;
     },
   };
 }
@@ -80,10 +78,39 @@ function licenses(): Plugin {
   };
 }
 
+/** Lists each embedded WebAssembly module's source and SHA-256 in a leading comment; fails the build if the bundle differs. */
+function wasmTable(): Plugin {
+  const modules = embeddedWasm();
+  return {
+    name: 'yearwego-reader-wasm-table',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'pre',
+      handler: (html) => html.replace('<!doctype html>', `<!doctype html>\n${wasmComment(modules)}`),
+    },
+    renderChunk(code) {
+      const found = findWasmBase64(code).map((blob) => blob.sha256);
+      const expected = modules.map((wasm) => wasm.sha256);
+      if (found.length !== expected.length || !expected.every((hash) => found.includes(hash))) {
+        this.error(`The bundle's WebAssembly (${found.join(', ')}) differs from the table (${expected.join(', ')}).`);
+      }
+      return null;
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [inlineSqlWasm(), licenses(), contentSecurityPolicy(), viteSingleFile({ removeViteModuleLoader: true })],
+  plugins: [
+    inlineSqlWasm(),
+    licenses(),
+    wasmTable(),
+    contentSecurityPolicy(),
+    viteSingleFile({ removeViteModuleLoader: true }),
+  ],
   build: {
     target: 'es2022',
+    // Unminified so a person can read the shipped code; the libraries' WebAssembly is checked by hash instead.
+    minify: false,
     assetsInlineLimit: Number.MAX_SAFE_INTEGER,
     chunkSizeWarningLimit: 10_000,
     reportCompressedSize: false,
