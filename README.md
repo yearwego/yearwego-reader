@@ -38,7 +38,7 @@ You don’t have to take our word for any of this. Everything the page does can 
   - `src/ui/` (about 500 lines) is the one page: the form, your Logbook, the players, and the download.
   - The built page carries this code unminified, with its names and layout, so what you read in `src/` is what you’ll find in the file.
 - **Rebuild it.** `npm ci && npm run build` makes a byte-for-byte identical `dist/yearwego-reader.html`, with the SHA-256 above.
-- **Check the live copy.** `curl -o page.html https://yearwego.com/reader/ && npm run verify -- page.html` compares it with this repository, offline:
+- **Check the live copy.** `curl -o page.html https://reader.yearwego.com/ && npm run verify -- page.html` compares it with this repository, offline:
   - each WebAssembly blob, decoded, byte for byte against the file in the npm package it came from;
   - that the page holds no other WebAssembly;
   - the whole file’s SHA-256 against `dist/yearwego-reader.html.sha256`;
@@ -78,6 +78,7 @@ npm run verify -- dist/yearwego-reader.html   # checks a built page; add --rebui
 - `scripts/` builds the page: license notices, the WebAssembly table, and `verify`.
 - `tests/` runs the core in Node against `spec/vectors.json` and the archives in `fixtures/`.
 - `fixtures/` holds golden archives made by the app’s own backup code with made-up entries and the passphrase `TEST`. They contain no one’s real data.
+- `netlify.toml` publishes the committed `dist/` to reader.yearwego.com as is, with no build on Netlify. To update the live page, rebuild and commit `dist/`.
 
 Pinned libraries: libsodium.js (sumo build, for Argon2id), sql.js (SQLite in WebAssembly), and fflate (zip). The build reads each library’s own license file and puts the texts in the page, under **Licenses** at the foot, and in a comment at the top of the file; it fails if anything bundled has no license notice.
 
