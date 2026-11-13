@@ -103,7 +103,24 @@ function setError(line: HTMLElement, message: string) {
 
 function renderTop(...right: Node[]) {
   top.replaceChildren(
-    h('div', { class: 'brand' }, wordmark(), h('span', { class: 'brand-divider' }), h('span', { class: 'eyebrow' }, 'Reader')),
+    h(
+      'div',
+      { class: 'brand' },
+      // A new tab, so following it never closes an open backup; the address carries nothing.
+      h(
+        'a',
+        {
+          class: 'brand-link',
+          href: 'https://yearwego.com/',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          'aria-label': 'YearWeGo, opens yearwego.com in a new tab',
+        },
+        wordmark(),
+      ),
+      h('span', { class: 'brand-divider' }),
+      h('span', { class: 'eyebrow' }, 'Reader'),
+    ),
     ...right,
   );
 }
