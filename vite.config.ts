@@ -11,6 +11,7 @@ export const CONTENT_SECURITY_POLICY = [
   "script-src 'unsafe-inline' 'wasm-unsafe-eval'",
   "style-src 'unsafe-inline'",
   'img-src data: blob:',
+  'font-src data:',
   'media-src blob:',
   "connect-src 'none'",
   "form-action 'none'",
