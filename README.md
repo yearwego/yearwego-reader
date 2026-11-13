@@ -25,7 +25,7 @@ If your backup was made before October 2, 2026, right after you replaced a lost 
 
 The SHA-256 of `dist/yearwego-reader.html` for this version is:
 
-<!-- sha256 -->`6dc01b29190afbb602615c117b240b970af4d951bb0174eef05fb974d1033571`<!-- /sha256 -->
+<!-- sha256 -->`4bddf0fba898ad204a73deeb2573e901b12ff9380571fb4c78220c7bdd7ca7cd`<!-- /sha256 -->
 
 On a Mac or Linux: `shasum -a 256 yearwego-reader.html`. On Windows: `certutil -hashfile yearwego-reader.html SHA256`.
 
@@ -57,6 +57,8 @@ You don’t have to take our word for any of this. Everything the page does can 
   - the one `.click()` is **Download everything**, on a link to a `blob:` address the page made itself, so it saves a file and goes nowhere;
   - the one `location` is sql.js reading its own address, never changing it;
   - `allocation` is a word in an error check.
+
+  The one link is the YearWeGo wordmark at the top, to `https://yearwego.com/`. It is a plain link you click, written into the page, never built from your backup. It opens in a new tab, so your open backup stays where it is, and `rel="noreferrer"` with the page’s `no-referrer` policy keeps it from saying where you came from. `grep -n "href:" src/ui/main.ts` finds it, beside the `blob:` download link.
 - **One more thing grep will find.** libsodium and sql.js each carry an `XMLHttpRequest` loader for web workers. The page never runs it, since both libraries are handed their WebAssembly directly, and `connect-src 'none'` would refuse it.
 
 ## The format

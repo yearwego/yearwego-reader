@@ -9624,7 +9624,13 @@ function setError(line, message) {
 	if (message) line.append(icon("alert"), h("span", {}, message));
 }
 function renderTop(...right) {
-	top.replaceChildren(h("div", { class: "brand" }, wordmark(), h("span", { class: "brand-divider" }), h("span", { class: "eyebrow" }, "Reader")), ...right);
+	top.replaceChildren(h("div", { class: "brand" }, h("a", {
+		class: "brand-link",
+		href: "https://yearwego.com/",
+		target: "_blank",
+		rel: "noopener noreferrer",
+		"aria-label": "YearWeGo, opens yearwego.com in a new tab"
+	}, wordmark()), h("span", { class: "brand-divider" }), h("span", { class: "eyebrow" }, "Reader")), ...right);
 }
 function offlineNote() {
 	return h("p", { class: "offline-note" }, icon("lock"), h("span", {}, "Works offline. Nothing leaves this computer."));
@@ -10361,6 +10367,17 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.brand-link {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+
+.brand-link:hover .wordmark {
+  color: var(--accent);
 }
 
 .wordmark {
