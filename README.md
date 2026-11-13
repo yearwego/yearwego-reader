@@ -25,7 +25,7 @@ If your backup was made before October 2, 2026, right after you replaced a lost 
 
 The SHA-256 of `dist/yearwego-reader.html` for this version is:
 
-<!-- sha256 -->`614cc943f61efad84022680234c83ac5fa30b3e6ea3fd7baf88ee74f6efdfc89`<!-- /sha256 -->
+<!-- sha256 -->`6dc01b29190afbb602615c117b240b970af4d951bb0174eef05fb974d1033571`<!-- /sha256 -->
 
 On a Mac or Linux: `shasum -a 256 yearwego-reader.html`. On Windows: `certutil -hashfile yearwego-reader.html SHA256`.
 
@@ -33,9 +33,9 @@ On a Mac or Linux: `shasum -a 256 yearwego-reader.html`. On Windows: `certutil -
 
 You don’t have to take our word for any of this. Everything the page does can be checked.
 
-- **Read the code.** `src/` is about 2,000 lines of TypeScript and 330 lines of CSS.
+- **Read the code.** `src/` is about 2,450 lines of TypeScript and 1,150 lines of CSS.
   - `src/core/` (about 1,500 lines) is the reader itself, with no DOM: open the archive, check the manifest, unlock the keys, read the database, decrypt words and audio, and build the export.
-  - `src/ui/` (about 500 lines) is the one page: the form, your Logbook, the players, and the download.
+  - `src/ui/` (about 950 lines) is the one page: the form, the opening steps, your Logbook, the players, the theme switch, and the download. `src/ui/icons.ts` holds the wordmark and the Lucide icons as SVG path data.
   - The built page carries this code unminified, with its names and layout, so what you read in `src/` is what you’ll find in the file.
 - **Rebuild it.** `npm ci && npm run build` makes a byte-for-byte identical `dist/yearwego-reader.html`, with the SHA-256 above.
 - **Check the live copy.** `curl -o page.html https://reader.yearwego.com/ && npm run verify -- page.html` compares it with this repository, offline:
@@ -52,7 +52,7 @@ You don’t have to take our word for any of this. Everything the page does can 
 | sql.js | 1.14.2 | `dist/sql-wasm-browser.wasm` | 658,410 | `38c14f6e379210bc942bdc4ebca44e7bfdb4318ecc1c72ca666a28fdce96670a` |
 <!-- /wasm -->
 
-- **What your browser blocks.** The Content-Security-Policy refuses every fetch, upload, beacon, and socket (`connect-src 'none'`), anything loaded from elsewhere, including images, fonts, and frames (`default-src 'none'`), and every form submission (`form-action 'none'`).
+- **What your browser blocks.** The Content-Security-Policy refuses every fetch, upload, beacon, and socket (`connect-src 'none'`), anything loaded from elsewhere, including images, fonts, and frames (`default-src 'none'`), and every form submission (`form-action 'none'`). The page’s fonts are built into the file and allowed only from there (`font-src data:`).
 - **What it can’t block.** No Content-Security-Policy can stop a script from sending the tab to another address, which could carry data in the URL. So the reader is written never to navigate or open a window. To check, run `grep -rnE "location|window\.open|\.click\(|history\." src/ dist/yearwego-reader.html`:
   - the one `.click()` is **Download everything**, on a link to a `blob:` address the page made itself, so it saves a file and goes nowhere;
   - the one `location` is sql.js reading its own address, never changing it;
@@ -80,7 +80,7 @@ npm run verify -- dist/yearwego-reader.html   # checks a built page; add --rebui
 - `fixtures/` holds golden archives made by the app’s own backup code with made-up entries and the passphrase `TEST`. They contain no one’s real data.
 - `netlify.toml` publishes the committed `dist/` to reader.yearwego.com as is, with no build on Netlify. To update the live page, rebuild and commit `dist/`.
 
-Pinned libraries: libsodium.js (sumo build, for Argon2id), sql.js (SQLite in WebAssembly), and fflate (zip). The build reads each library’s own license file and puts the texts in the page, under **Licenses** at the foot, and in a comment at the top of the file; it fails if anything bundled has no license notice.
+Pinned libraries: libsodium.js (sumo build, for Argon2id), sql.js (SQLite in WebAssembly), and fflate (zip). The page uses yearwego.com’s fonts, Newsreader, IBM Plex Sans, and Space Mono (latin subsets from Fontsource, SIL Open Font License), and Lucide icons (ISC). The build reads each library’s own license file and puts the texts in the page, under **Licenses** at the foot, and in a comment at the top of the file; it fails if anything bundled has no license notice.
 
 ## License
 
