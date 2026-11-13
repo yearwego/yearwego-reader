@@ -1,0 +1,20 @@
+# reader.yearwego.com serves the committed dist/ as is, so the live page is the audited file
+# byte for byte (its SHA-256 is in README.md). No build runs on Netlify.
+[build]
+  publish = "dist"
+  command = ""
+
+[[redirects]]
+  from = "/"
+  to = "/yearwego-reader.html"
+  status = 200
+
+# The same policy as the page's own <meta>, plus frame-ancestors, which only a header can set.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
