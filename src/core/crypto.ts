@@ -119,8 +119,16 @@ export const aad = {
     `v1|recording.audio|${recordingId}|${cryptoKeyId}`,
 };
 
-/** Exact text first; then trimmed and lowercased, which is how generated passphrases are written. */
-export function passphraseCandidates(passphrase: string): string[] {
-  const relaxed = passphrase.trim().toLowerCase();
-  return relaxed && relaxed !== passphrase ? [passphrase, relaxed] : [passphrase];
+const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF]/g;
+const NOT_A_LETTER = /[^a-z]+/g;
+
+/** The app's normalised form (spec §4): words of a–z joined by single dashes. */
+export function normalizePassphrase(typed: string): string {
+  return typed
+    .normalize('NFKC')
+    .replace(INVISIBLE, '')
+    .toLowerCase()
+    .replace(NOT_A_LETTER, '-')
+    .replace(/^-+|-+$/g, '');
 }
+

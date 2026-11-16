@@ -5009,10 +5009,11 @@ var aad = {
 	].join("|"),
 	legacyAudio: (recordingId, cryptoKeyId) => `v1|recording.audio|${recordingId}|${cryptoKeyId}`
 };
-/** Exact text first; then trimmed and lowercased, which is how generated passphrases are written. */
-function passphraseCandidates(passphrase) {
-	const relaxed = passphrase.trim().toLowerCase();
-	return relaxed && relaxed !== passphrase ? [passphrase, relaxed] : [passphrase];
+var INVISIBLE = /[\u200B-\u200D\u2060\uFEFF]/g;
+var NOT_A_LETTER = /[^a-z]+/g;
+/** The app's normalised form (spec §4): words of a–z joined by single dashes. */
+function normalizePassphrase(typed) {
+	return typed.normalize("NFKC").replace(INVISIBLE, "").toLowerCase().replace(NOT_A_LETTER, "-").replace(/^-+|-+$/g, "");
 }
 // src/core/errors.ts
 var MESSAGES = {
@@ -6138,23 +6139,17 @@ async function unsealArchive(files, passphrase, onProgress = () => {}) {
 		throw new ReaderError("not-a-backup", "The header salt is not readable.");
 	}
 	await onProgress("unlocking-backup");
+	const usedPassphrase = normalizePassphrase(passphrase);
 	let inner = null;
-	let usedPassphrase = passphrase;
-	for (const candidate of passphraseCandidates(passphrase)) {
-		let key = null;
-		try {
-			key = deriveKey(candidate, salt, header.kdfParams);
-			inner = open(key, nonce, ciphertext, aad.archive(header.backupFormatVersion, header.salt));
-		} catch (error) {
-			if (isOutOfMemory(error)) throw new ReaderError("out-of-memory");
-			throw error;
-		} finally {
-			wipe(key);
-		}
-		if (inner) {
-			usedPassphrase = candidate;
-			break;
-		}
+	let key = null;
+	try {
+		key = deriveKey(usedPassphrase, salt, header.kdfParams);
+		inner = open(key, nonce, ciphertext, aad.archive(header.backupFormatVersion, header.salt));
+	} catch (error) {
+		if (isOutOfMemory(error)) throw new ReaderError("out-of-memory");
+		throw error;
+	} finally {
+		wipe(key);
 	}
 	if (!inner) throw new ReaderError("wrong-passphrase");
 	await onProgress("checking");
@@ -6588,7 +6583,8 @@ function keyBackupRows(db, manifestRowId) {
 function unlockRootKey(db, passphrase, manifestRowId) {
 	const rows = keyBackupRows(db, manifestRowId);
 	if (rows.length === 0) throw new ReaderError("no-key");
-	for (const candidate of passphraseCandidates(passphrase)) for (const row of rows) {
+	const normalized = normalizePassphrase(passphrase);
+	for (const row of rows) {
 		let params;
 		try {
 			params = JSON.parse(row.kdfParamsJson);
@@ -6598,7 +6594,7 @@ function unlockRootKey(db, passphrase, manifestRowId) {
 		if (!isSupportedKdf(params)) continue;
 		let backupKey = null;
 		try {
-			backupKey = deriveKey(candidate, row.kdfSalt, params);
+			backupKey = deriveKey(normalized, row.kdfSalt, params);
 			const rootKey = open(backupKey, row.nonce, row.encryptedKey, aad.keyBackup(row.cryptoKeyId));
 			if (rootKey) return rootKey;
 		} catch (error) {

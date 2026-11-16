@@ -4,7 +4,7 @@ import {
   fromBase64UrlNoPadding,
   isSupportedKdf,
   open,
-  passphraseCandidates,
+  normalizePassphrase,
   ready,
   wipe,
   type KdfParams,
@@ -132,23 +132,17 @@ export async function unsealArchive(
   }
 
   await onProgress('unlocking-backup');
+  const usedPassphrase = normalizePassphrase(passphrase);
   let inner: Uint8Array | null = null;
-  let usedPassphrase = passphrase;
-  for (const candidate of passphraseCandidates(passphrase)) {
-    let key: Uint8Array | null = null;
-    try {
-      key = deriveKey(candidate, salt, header.kdfParams);
-      inner = open(key, nonce, ciphertext, aad.archive(header.backupFormatVersion, header.salt));
-    } catch (error) {
-      if (isOutOfMemory(error)) throw new ReaderError('out-of-memory');
-      throw error;
-    } finally {
-      wipe(key);
-    }
-    if (inner) {
-      usedPassphrase = candidate;
-      break;
-    }
+  let key: Uint8Array | null = null;
+  try {
+    key = deriveKey(usedPassphrase, salt, header.kdfParams);
+    inner = open(key, nonce, ciphertext, aad.archive(header.backupFormatVersion, header.salt));
+  } catch (error) {
+    if (isOutOfMemory(error)) throw new ReaderError('out-of-memory');
+    throw error;
+  } finally {
+    wipe(key);
   }
   if (!inner) throw new ReaderError('wrong-passphrase');
 

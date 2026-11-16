@@ -25,7 +25,7 @@ If your backup was made before October 2, 2026, right after you replaced a lost 
 
 The SHA-256 of `dist/yearwego-reader.html` for this version is:
 
-<!-- sha256 -->`06fab4a53418ee3201594aac8934c239ce07ee1ff8adbf01a9336f4c86cc04e9`<!-- /sha256 -->
+<!-- sha256 -->`99768711e30559bcd775b5bd09bcb9ac0d27ce851a1fd753b5b3f089a60e913a`<!-- /sha256 -->
 
 On a Mac or Linux: `shasum -a 256 yearwego-reader.html`. On Windows: `certutil -hashfile yearwego-reader.html SHA256`.
 
