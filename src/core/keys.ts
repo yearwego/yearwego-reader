@@ -1,4 +1,4 @@
-import { aad, checksum, deriveKey, isSupportedKdf, open, passphraseCandidates, toHex, wipe } from './crypto';
+import { aad, checksum, deriveKey, isSupportedKdf, normalizePassphrase, open, toHex, wipe } from './crypto';
 import { asBytes, asString, type BackupDatabase } from './database';
 import { isOutOfMemory, ReaderError } from './errors';
 
@@ -60,26 +60,25 @@ export function unlockRootKey(
   const rows = keyBackupRows(db, manifestRowId);
   if (rows.length === 0) throw new ReaderError('no-key');
 
-  for (const candidate of passphraseCandidates(passphrase)) {
-    for (const row of rows) {
-      let params: unknown;
-      try {
-        params = JSON.parse(row.kdfParamsJson);
-      } catch {
-        continue;
-      }
-      if (!isSupportedKdf(params)) continue;
-      let backupKey: Uint8Array | null = null;
-      try {
-        backupKey = deriveKey(candidate, row.kdfSalt, params);
-        const rootKey = open(backupKey, row.nonce, row.encryptedKey, aad.keyBackup(row.cryptoKeyId));
-        if (rootKey) return rootKey;
-      } catch (error) {
-        if (isOutOfMemory(error)) throw new ReaderError('out-of-memory');
-        throw error;
-      } finally {
-        wipe(backupKey);
-      }
+  const normalized = normalizePassphrase(passphrase);
+  for (const row of rows) {
+    let params: unknown;
+    try {
+      params = JSON.parse(row.kdfParamsJson);
+    } catch {
+      continue;
+    }
+    if (!isSupportedKdf(params)) continue;
+    let backupKey: Uint8Array | null = null;
+    try {
+      backupKey = deriveKey(normalized, row.kdfSalt, params);
+      const rootKey = open(backupKey, row.nonce, row.encryptedKey, aad.keyBackup(row.cryptoKeyId));
+      if (rootKey) return rootKey;
+    } catch (error) {
+      if (isOutOfMemory(error)) throw new ReaderError('out-of-memory');
+      throw error;
+    } finally {
+      wipe(backupKey);
     }
   }
   throw new ReaderError('earlier-passphrase-needed');

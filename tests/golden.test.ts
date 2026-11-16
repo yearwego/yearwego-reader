@@ -14,7 +14,7 @@ import { aad, deriveKey, fromBase64UrlNoPadding, ready } from '../src/core/crypt
 import { localDate } from '../src/core/export';
 import { fixture, GOLDEN, GOLDEN_NO_MILESTONES, GOLDEN_SECOND_PASSPHRASE, loadSql } from './helpers';
 
-const PASSPHRASE = 'TEST';
+const PASSPHRASE = 'test';
 
 async function expectReaderError(promise: Promise<unknown>, code: string) {
   await expect(promise).rejects.toBeInstanceOf(ReaderError);
@@ -244,7 +244,7 @@ describe('an archive whose words are locked with an earlier passphrase', () => {
       unlockBackup(archive, { loadSql, passphrase: 'WRONG' }),
       'earlier-passphrase-needed',
     );
-    const backup = await unlockBackup(archive, { loadSql, passphrase: 'OLD-TEST' });
+    const backup = await unlockBackup(archive, { loadSql, passphrase: 'old-test' });
     expect(backup.days).toHaveLength(4);
     expect(backup.days[3]!.answer!.text).toBe('Ran the whole thing without stopping.');
     backup.close();

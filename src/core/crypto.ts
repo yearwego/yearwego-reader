@@ -132,9 +132,3 @@ export function normalizePassphrase(typed: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** Exact text first, for archives sealed with a non-normalised passphrase; then the app's
- *  normalised form. */
-export function passphraseCandidates(passphrase: string): string[] {
-  const normalized = normalizePassphrase(passphrase);
-  return normalized && normalized !== passphrase ? [passphrase, normalized] : [passphrase];
-}
