@@ -5009,10 +5009,17 @@ var aad = {
 	].join("|"),
 	legacyAudio: (recordingId, cryptoKeyId) => `v1|recording.audio|${recordingId}|${cryptoKeyId}`
 };
-/** Exact text first; then trimmed and lowercased, which is how generated passphrases are written. */
+var INVISIBLE = /[\u200B-\u200D\u2060\uFEFF]/g;
+var NOT_A_LETTER = /[^a-z]+/g;
+/** The app's normalised form (spec §4): words of a–z joined by single dashes. */
+function normalizePassphrase(typed) {
+	return typed.normalize("NFKC").replace(INVISIBLE, "").toLowerCase().replace(NOT_A_LETTER, "-").replace(/^-+|-+$/g, "");
+}
+/** Exact text first, for archives sealed with a non-normalised passphrase; then the app's
+*  normalised form. */
 function passphraseCandidates(passphrase) {
-	const relaxed = passphrase.trim().toLowerCase();
-	return relaxed && relaxed !== passphrase ? [passphrase, relaxed] : [passphrase];
+	const normalized = normalizePassphrase(passphrase);
+	return normalized && normalized !== passphrase ? [passphrase, normalized] : [passphrase];
 }
 // src/core/errors.ts
 var MESSAGES = {
