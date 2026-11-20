@@ -41,6 +41,8 @@ export type Aim = {
   createdAt: number;
   reachedAt: number | null;
   closedAt: number | null;
+  /** The journey it belongs to, from 2026-11-20; null before journeys. */
+  journeyName: string | null;
   entry: Entry;
 };
 
@@ -189,22 +191,44 @@ export class LogbookBuilder {
   }
 
   private aimsFromMilestones(): Aim[] {
+    const hasJourneys =
+      this.db.columns('journeys').has('name') && this.db.columns('journey_milestones').has('milestone_id');
+    const journeySelect = hasJourneys
+      ? 'j.name AS journey_name, j.set_aside_at AS set_aside_at'
+      : 'NULL AS journey_name, NULL AS set_aside_at';
+    const journeyJoin = hasJourneys
+      ? `LEFT JOIN journey_milestones jm ON jm.milestone_id = m.id
+         LEFT JOIN journeys j ON j.id = jm.journey_id`
+      : '';
     const rows = this.db.all(
       `SELECT m.id AS milestone_id, m.created_at AS milestone_created_at, m.reached_at AS reached_at,
-              m.closed_at AS closed_at, ${entrySelect(this.db, this.withTranscripts)}
+              m.closed_at AS closed_at, ${this.db.column('milestones', 'm', 'focused_at', 'focused_at')},
+              ${journeySelect}, ${entrySelect(this.db, this.withTranscripts)}
        FROM milestones m
        JOIN recordings r ON r.id = m.recording_id
        JOIN sessions s ON s.id = r.session_id
+       ${journeyJoin}
        ${this.transcriptJoin()}
        ORDER BY m.created_at DESC, m.id DESC`,
     );
-    return rows.map((row) => ({
+    const aims = rows.map((row) => ({
       id: asString(row.milestone_id) ?? '',
       createdAt: asNumber(row.milestone_created_at) ?? 0,
       reachedAt: asNumber(row.reached_at),
       closedAt: asNumber(row.closed_at),
+      journeyName: asString(row.journey_name),
+      focusedAt: asNumber(row.focused_at),
+      setAside: asNumber(row.set_aside_at) !== null,
       entry: this.entryFrom(row, 'aim'),
     }));
+    if (!hasJourneys) return aims.map(({ focusedAt: _f, setAside: _s, ...aim }) => aim);
+    // From 2026-11-20 many are open; the current one is the unreached milestone focused last.
+    const open = aims.filter((aim) => aim.reachedAt === null && !aim.setAside);
+    const current = [...open].sort(
+      (a, b) => (b.focusedAt ?? b.createdAt) - (a.focusedAt ?? a.createdAt),
+    )[0];
+    const ordered = current ? [current, ...aims.filter((aim) => aim !== current)] : aims;
+    return ordered.map(({ focusedAt: _f, setAside: _s, ...aim }) => aim);
   }
 
   /** Before the milestones table: the same rule the 2026-10-29 backfill migration used. */
@@ -236,6 +260,7 @@ export class LogbookBuilder {
         createdAt: entry.createdAt,
         reachedAt: asNumber(row.did_goal) === 1 ? asNumber(row.confirmed_at) : null,
         closedAt: newer ? newer.createdAt : null,
+        journeyName: null,
         entry,
       });
     }

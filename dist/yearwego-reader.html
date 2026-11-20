@@ -6811,19 +6811,31 @@ var LogbookBuilder = class {
 		return milestoneColumns.has("recording_id") && milestoneColumns.has("closed_at") && !milestoneColumns.has("session_id") ? this.aimsFromMilestones() : this.aimsFromSessions();
 	}
 	aimsFromMilestones() {
-		return this.db.all(`SELECT m.id AS milestone_id, m.created_at AS milestone_created_at, m.reached_at AS reached_at,
-              m.closed_at AS closed_at, ${entrySelect(this.db, this.withTranscripts)}
+		const hasJourneys = this.db.columns("journeys").has("name") && this.db.columns("journey_milestones").has("milestone_id");
+		const journeySelect = hasJourneys ? "j.name AS journey_name, j.set_aside_at AS set_aside_at" : "NULL AS journey_name, NULL AS set_aside_at";
+		const journeyJoin = hasJourneys ? `LEFT JOIN journey_milestones jm ON jm.milestone_id = m.id
+         LEFT JOIN journeys j ON j.id = jm.journey_id` : "";
+		const aims = this.db.all(`SELECT m.id AS milestone_id, m.created_at AS milestone_created_at, m.reached_at AS reached_at,
+              m.closed_at AS closed_at, ${this.db.column("milestones", "m", "focused_at", "focused_at")},
+              ${journeySelect}, ${entrySelect(this.db, this.withTranscripts)}
        FROM milestones m
        JOIN recordings r ON r.id = m.recording_id
        JOIN sessions s ON s.id = r.session_id
+       ${journeyJoin}
        ${this.transcriptJoin()}
        ORDER BY m.created_at DESC, m.id DESC`).map((row) => ({
 			id: asString(row.milestone_id) ?? "",
 			createdAt: asNumber(row.milestone_created_at) ?? 0,
 			reachedAt: asNumber(row.reached_at),
 			closedAt: asNumber(row.closed_at),
+			journeyName: asString(row.journey_name),
+			focusedAt: asNumber(row.focused_at),
+			setAside: asNumber(row.set_aside_at) !== null,
 			entry: this.entryFrom(row, "aim")
 		}));
+		if (!hasJourneys) return aims.map(({ focusedAt: _f, setAside: _s, ...aim }) => aim);
+		const current = [...aims.filter((aim) => aim.reachedAt === null && !aim.setAside)].sort((a, b) => (b.focusedAt ?? b.createdAt) - (a.focusedAt ?? a.createdAt))[0];
+		return (current ? [current, ...aims.filter((aim) => aim !== current)] : aims).map(({ focusedAt: _f, setAside: _s, ...aim }) => aim);
 	}
 	/** Before the milestones table: the same rule the 2026-10-29 backfill migration used. */
 	aimsFromSessions() {
@@ -6850,6 +6862,7 @@ var LogbookBuilder = class {
 				createdAt: entry.createdAt,
 				reachedAt: asNumber(row.did_goal) === 1 ? asNumber(row.confirmed_at) : null,
 				closedAt: newer ? newer.createdAt : null,
+				journeyName: null,
 				entry
 			});
 		}
@@ -10044,10 +10057,10 @@ function currentAimCard(backup, aim) {
 	return h("article", {
 		class: "aim-card",
 		"aria-labelledby": "aim-label"
-	}, label, wordsFor(aim.entry), playerFor(backup, aim.entry, `where you’re headed, set ${longDate(aim.createdAt)}`));
+	}, label, aim.journeyName ? h("p", { class: "caption" }, aim.journeyName) : null, wordsFor(aim.entry), playerFor(backup, aim.entry, `where you’re headed, set ${longDate(aim.createdAt)}`));
 }
 function earlierAimCard(backup, aim) {
-	return h("article", { class: "entry-card" }, h("p", { class: "caption" }, `Where you were headed · ${shortDate(aim.createdAt)}`), wordsFor(aim.entry), playerFor(backup, aim.entry, `where you were headed, set ${longDate(aim.createdAt)}`), aim.reachedAt ? h("p", { class: "reached" }, `Reached ${shortDate(aim.reachedAt)}`) : null);
+	return h("article", { class: "entry-card" }, h("p", { class: "caption" }, aim.journeyName ? `${aim.journeyName} · ${shortDate(aim.createdAt)}` : `Where you were headed · ${shortDate(aim.createdAt)}`), wordsFor(aim.entry), playerFor(backup, aim.entry, `where you were headed, set ${longDate(aim.createdAt)}`), aim.reachedAt ? h("p", { class: "reached" }, `Reached ${shortDate(aim.reachedAt)}`) : null);
 }
 function followUpCaption(entry) {
 	if (entry.recordingType === "celebration") return "What you’re proud of";

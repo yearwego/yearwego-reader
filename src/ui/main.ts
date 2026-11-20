@@ -592,6 +592,7 @@ function currentAimCard(backup: OpenedBackup, aim: Aim | undefined): HTMLElement
     'article',
     { class: 'aim-card', 'aria-labelledby': 'aim-label' },
     label,
+    aim.journeyName ? h('p', { class: 'caption' }, aim.journeyName) : null,
     wordsFor(aim.entry),
     playerFor(backup, aim.entry, `where you’re headed, set ${longDate(aim.createdAt)}`),
   );
@@ -601,7 +602,13 @@ function earlierAimCard(backup: OpenedBackup, aim: Aim): HTMLElement {
   return h(
     'article',
     { class: 'entry-card' },
-    h('p', { class: 'caption' }, `Where you were headed · ${shortDate(aim.createdAt)}`),
+    h(
+      'p',
+      { class: 'caption' },
+      aim.journeyName
+        ? `${aim.journeyName} · ${shortDate(aim.createdAt)}`
+        : `Where you were headed · ${shortDate(aim.createdAt)}`,
+    ),
     wordsFor(aim.entry),
     playerFor(backup, aim.entry, `where you were headed, set ${longDate(aim.createdAt)}`),
     aim.reachedAt ? h('p', { class: 'reached' }, `Reached ${shortDate(aim.reachedAt)}`) : null,
