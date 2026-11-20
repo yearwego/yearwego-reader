@@ -6472,6 +6472,11 @@ function buildExport(source) {
 	});
 	return writeZip(files);
 }
+/** The first is the one the app was working on; from 2026-11-20 others can be open beside it. */
+function aimLabel(aim, index) {
+	if (aim.closedAt !== null || index > 0 && aim.reachedAt !== null) return "Earlier";
+	return index === 0 ? "Now" : "Open";
+}
 function buildMarkdown(source, written) {
 	const out = ["# Your YearWeGo Logbook", ""];
 	if (source.backupCreatedAt) {
@@ -6480,13 +6485,14 @@ function buildMarkdown(source, written) {
 	}
 	out.push("## Where you’re headed", "");
 	if (source.aims.length === 0) out.push("_Nothing saved here._", "");
-	for (const aim of source.aims) {
+	source.aims.forEach((aim, index) => {
 		const status = [`Set ${longDate(aim.createdAt)}`];
 		if (aim.reachedAt) status.push(`you got there ${longDate(aim.reachedAt)}`);
 		if (aim.closedAt) status.push(`replaced ${longDate(aim.closedAt)}`);
-		out.push(`### ${aim.closedAt ? "Earlier" : "Now"}`, "", `${status.join("; ")}.`, "");
+		const heading = [aimLabel(aim, index), aim.journeyName].filter(Boolean).join(" · ");
+		out.push(`### ${heading}`, "", `${status.join("; ")}.`, "");
 		out.push(entryMarkdown(aim.entry, written.get(aim.entry.recordingId) ?? null), "");
-	}
+	});
 	out.push("## Days", "");
 	if (source.days.length === 0) out.push("_No days in this backup._", "");
 	for (const day of source.days) {
@@ -6523,8 +6529,9 @@ function buildJson(source, written) {
 			createdAt: source.backupCreatedAt,
 			appVersion: source.appVersion
 		},
-		whereYoureHeaded: source.aims.map((aim) => ({
-			current: aim.closedAt === null,
+		whereYoureHeaded: source.aims.map((aim, index) => ({
+			current: index === 0 && aim.closedAt === null,
+			journey: aim.journeyName,
 			setAt: iso(aim.createdAt),
 			reachedAt: iso(aim.reachedAt),
 			replacedAt: iso(aim.closedAt),

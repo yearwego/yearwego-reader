@@ -6,7 +6,7 @@ Changes you can see in the YearWeGo Reader, newest first. Each released version 
 
 ### Added
 
-- Backups from the app’s journeys build show each milestone’s journey, and Where you’re headed is the milestone the app was working on.
+- Backups from the app’s journeys build show each milestone’s journey, and Where you’re headed is the milestone the app was working on. The download names each milestone’s journey too, with the others still open marked Open.
 
 ### Changed
 
