@@ -4,6 +4,10 @@ Changes you can see in the YearWeGo Reader, newest first. Each released version 
 
 ## Unreleased
 
+### Added
+
+- Backups from the app’s journeys build show each milestone’s journey, and Where you’re headed is the milestone the app was working on. The download names each milestone’s journey too, with the others still open marked Open.
+
 ### Changed
 
 - Your passphrase opens a backup however you type the gaps between the words: spaces, long dashes, a full stop, or a line break, and with capitals, as the app accepts.
