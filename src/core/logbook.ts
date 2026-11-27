@@ -1,4 +1,4 @@
-import { aad, open, sealedParts } from './crypto';
+import { aad, open, sealedParts, splitPacked, unpadText } from './crypto';
 import { asBytes, asNumber, asString, type BackupDatabase, type Row } from './database';
 import type { KeyRing } from './keys';
 import { checkInQuestionFor, questionFor } from './prompts';
@@ -81,6 +81,21 @@ function entrySelect(db: BackupDatabase, withTranscripts: boolean): string {
     columns.push('NULL AS transcript_id', 'NULL AS encrypted_text', 'NULL AS text_nonce');
   }
   return columns.join(', ');
+}
+
+/** A journey's name, plain before 2026-11-27 and sealed since (spec §8.2, §10.5). */
+function journeySelect(db: BackupDatabase): string | null {
+  const columns = db.columns('journeys');
+  if (!db.columns('journey_milestones').has('milestone_id')) return null;
+  if (columns.has('encrypted_name')) {
+    return `NULL AS journey_name, j.id AS journey_id, j.crypto_key_id AS journey_key_id,
+            j.encrypted_name AS encrypted_journey_name, j.set_aside_at AS set_aside_at`;
+  }
+  if (columns.has('name')) {
+    return `j.name AS journey_name, NULL AS journey_id, NULL AS journey_key_id,
+            NULL AS encrypted_journey_name, j.set_aside_at AS set_aside_at`;
+  }
+  return null;
 }
 
 export class LogbookBuilder {
@@ -195,12 +210,24 @@ export class LogbookBuilder {
     return hasCurrentMilestones ? this.aimsFromMilestones() : this.aimsFromSessions();
   }
 
+  /** Text in the sealed column was never sealed and reads as it is. Null when it won't open. */
+  private journeyNameFrom(row: Row): string | null {
+    const plain = row.journey_name ?? row.encrypted_journey_name;
+    if (typeof plain === 'string') return plain;
+    const blob = asBytes(row.encrypted_journey_name);
+    const journeyId = asString(row.journey_id);
+    const keyId = asString(row.journey_key_id);
+    if (!blob || !journeyId || !keyId) return null;
+    const split = splitPacked(blob);
+    const key = this.keys.dataKey(keyId);
+    if (!split.ok || !key) return null;
+    const padded = open(key, split.parts.nonce, split.parts.ciphertext, aad.journeyName(journeyId));
+    return padded ? unpadText(padded) : null;
+  }
+
   private aimsFromMilestones(): Aim[] {
-    const hasJourneys =
-      this.db.columns('journeys').has('name') && this.db.columns('journey_milestones').has('milestone_id');
-    const journeySelect = hasJourneys
-      ? 'j.name AS journey_name, j.set_aside_at AS set_aside_at'
-      : 'NULL AS journey_name, NULL AS set_aside_at';
+    const journeyColumns = journeySelect(this.db);
+    const hasJourneys = journeyColumns !== null;
     const journeyJoin = hasJourneys
       ? `LEFT JOIN journey_milestones jm ON jm.milestone_id = m.id
          LEFT JOIN journeys j ON j.id = jm.journey_id`
@@ -208,7 +235,7 @@ export class LogbookBuilder {
     const rows = this.db.all(
       `SELECT m.id AS milestone_id, m.created_at AS milestone_created_at, m.reached_at AS reached_at,
               m.closed_at AS closed_at, ${this.db.column('milestones', 'm', 'focused_at', 'focused_at')},
-              ${journeySelect}, ${entrySelect(this.db, this.withTranscripts)}
+              ${journeyColumns ?? 'NULL AS set_aside_at'}, ${entrySelect(this.db, this.withTranscripts)}
        FROM milestones m
        JOIN recordings r ON r.id = m.recording_id
        JOIN sessions s ON s.id = r.session_id
@@ -221,7 +248,7 @@ export class LogbookBuilder {
       createdAt: asNumber(row.milestone_created_at) ?? 0,
       reachedAt: asNumber(row.reached_at),
       closedAt: asNumber(row.closed_at),
-      journeyName: asString(row.journey_name),
+      journeyName: this.journeyNameFrom(row),
       focusedAt: asNumber(row.focused_at),
       setAside: asNumber(row.set_aside_at) !== null,
       entry: this.entryFrom(row, 'aim'),

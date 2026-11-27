@@ -2,7 +2,17 @@ import sodium from 'libsodium-wrappers-sumo';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseHeader } from '../src/core/archive';
 import { decryptChunkedRecording } from '../src/core/audio';
-import { aad, checksum, deriveKey, hash32, open, ready, sealedParts, splitPacked } from '../src/core/crypto';
+import {
+  aad,
+  checksum,
+  deriveKey,
+  hash32,
+  open,
+  ready,
+  sealedParts,
+  splitPacked,
+  unpadText,
+} from '../src/core/crypto';
 import { vectors } from './helpers';
 
 const v = vectors();
@@ -75,6 +85,18 @@ describe('known-answer vectors from the app (spec/vectors.json)', () => {
     expect(
       new TextDecoder().decode(open(bytes(v.transcript.dek_hex), text.nonce, text.ciphertext, v.transcript.aad)!),
     ).toBe(v.transcript.text);
+  });
+
+  it('opens a journey’s sealed name and removes its padding', () => {
+    const { journey } = v;
+    expect(aad.journeyName(journey.journey_id)).toBe(journey.name.aad);
+    const split = splitPacked(bytes(journey.name.packed_hex));
+    if (!split.ok) throw new Error(split.reason);
+    expect(hex(split.parts.nonce)).toBe(journey.name.nonce_hex);
+    const padded = open(bytes(journey.dek_hex), split.parts.nonce, split.parts.ciphertext, journey.name.aad)!;
+    expect(hex(padded)).toBe(journey.name.padded_hex);
+    expect(unpadText(padded)).toBe(journey.name.text);
+    expect(unpadText(padded.subarray(0, padded.length - 1))).toBeNull();
   });
 
   it('prefers a separate nonce column over splitting the value', () => {

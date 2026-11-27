@@ -83,6 +83,18 @@ export function sealedParts(value: Uint8Array | null, separateNonce: Uint8Array 
   return split.ok ? split.parts : null;
 }
 
+export const PADDING_BLOCK_BYTES = 32;
+
+/** The text of a padded value (spec §8.2): libsodium's `sodium_pad` format, to 32-byte blocks.
+ *  Null when the padding is malformed. */
+export function unpadText(padded: Uint8Array): string | null {
+  try {
+    return new TextDecoder().decode(sodium.unpad(padded, PADDING_BLOCK_BYTES));
+  } catch {
+    return null;
+  }
+}
+
 /** Null when the tag does not verify: wrong key, wrong place, or damaged bytes. */
 export function open(
   key: Uint8Array,
@@ -130,6 +142,7 @@ export const aad = {
   keyBackup: (cryptoKeyId: string) => `v1|crypto_key_backup|${cryptoKeyId}`,
   dataKey: (cryptoKeyId: string) => `v1|crypto_key.data_encryption_key|${cryptoKeyId}`,
   transcript: (transcriptId: string) => `v1|transcript.text|${transcriptId}`,
+  journeyName: (journeyId: string) => `v1|journey.name|${journeyId}`,
   audioChunk: (parts: {
     recordingId: string;
     cryptoKeyId: string;
