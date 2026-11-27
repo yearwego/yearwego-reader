@@ -1,4 +1,5 @@
 import {
+  countLine,
   localDate,
   longDate,
   outcomeWords,
@@ -583,6 +584,16 @@ function wordsFor(entry: Entry, className = 'words'): HTMLElement {
   return h('p', { class: 'missing' }, 'Not transcribed. Play the recording to hear it.');
 }
 
+/** A milestone's counts, one line each. */
+function countsFor(aim: Aim): HTMLElement | null {
+  if (aim.counts.length === 0) return null;
+  return h(
+    'ul',
+    { class: 'counts', 'aria-label': 'Counts' },
+    ...aim.counts.map((count) => h('li', {}, countLine(count))),
+  );
+}
+
 function currentAimCard(backup: OpenedBackup, aim: Aim | undefined): HTMLElement {
   const label = h('h2', { class: 'aim-label', id: 'aim-label' }, icon('navigation'), 'Where you’re headed');
   if (!aim) {
@@ -595,6 +606,7 @@ function currentAimCard(backup: OpenedBackup, aim: Aim | undefined): HTMLElement
     aim.journeyName ? h('p', { class: 'caption' }, aim.journeyName) : null,
     wordsFor(aim.entry),
     playerFor(backup, aim.entry, `where you’re headed, set ${longDate(aim.createdAt)}`),
+    countsFor(aim),
   );
 }
 
@@ -611,6 +623,7 @@ function earlierAimCard(backup: OpenedBackup, aim: Aim): HTMLElement {
     ),
     wordsFor(aim.entry),
     playerFor(backup, aim.entry, `where you were headed, set ${longDate(aim.createdAt)}`),
+    countsFor(aim),
     aim.reachedAt ? h('p', { class: 'reached' }, `Reached ${shortDate(aim.reachedAt)}`) : null,
   );
 }

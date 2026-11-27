@@ -2,7 +2,7 @@ import sodium from 'libsodium-wrappers-sumo';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseHeader } from '../src/core/archive';
 import { decryptChunkedRecording } from '../src/core/audio';
-import { aad, checksum, deriveKey, hash32, open, ready } from '../src/core/crypto';
+import { aad, checksum, deriveKey, hash32, open, openPacked, ready, unpad } from '../src/core/crypto';
 import { vectors } from './helpers';
 
 const v = vectors();
@@ -50,6 +50,21 @@ describe('known-answer vectors from the app (spec/vectors.json)', () => {
     const dek = open(bytes(row.root_key_hex), bytes(row.nonce_hex), bytes(row.encrypted_key_hex), row.aad);
     expect(dek && hex(dek)).toBe(row.dek_hex);
     expect(checksum(dek!)).toBe(row.checksum_hex);
+  });
+
+  it('opens a count’s sealed name, value, and goal, and removes the padding', () => {
+    const count = v.count;
+    expect(aad.measureName(count.measure_id)).toBe(count.name.aad);
+    expect(aad.measureEntryValue(count.measure_entry_id)).toBe(count.value.aad);
+    expect(aad.milestoneMeasureTarget(count.milestone_measure_id)).toBe(count.target_total.aad);
+    for (const field of ['name', 'value', 'target_total'] as const) {
+      const vector = count[field];
+      const padded = openPacked(bytes(count.dek_hex), bytes(vector.packed_hex), vector.aad);
+      expect(padded && hex(padded)).toBe(vector.padded_hex);
+      expect(new TextDecoder().decode(unpad(padded!)!)).toBe(vector.text);
+      // Bound to its row: the same blob under another row's AAD doesn't open.
+      expect(openPacked(bytes(count.dek_hex), bytes(vector.packed_hex), `${vector.aad}x`)).toBeNull();
+    }
   });
 
   it('decrypts a transcript', () => {

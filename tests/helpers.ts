@@ -23,3 +23,4 @@ export function vectors() {
 export const GOLDEN = 'golden.yearwego.backup.zip';
 export const GOLDEN_NO_MILESTONES = 'golden-no-milestones.yearwego.backup.zip';
 export const GOLDEN_SECOND_PASSPHRASE = 'golden-second-passphrase.yearwego.backup.zip';
+export const GOLDEN_COUNTS = 'golden-counts.yearwego.backup.zip';

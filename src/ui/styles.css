@@ -915,6 +915,23 @@ button:disabled {
   color: var(--accent);
 }
 
+/* A milestone's counts (spec §10.6) */
+
+.counts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.counts li {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--dim);
+}
+
 /* Players */
 
 .play-chip {

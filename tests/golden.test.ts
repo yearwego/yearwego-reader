@@ -2,6 +2,7 @@ import { unzipSync, zipSync } from 'fflate';
 import sodium from 'libsodium-wrappers-sumo';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  countLine,
   openBackup,
   ReaderError,
   unlockBackup,
@@ -12,7 +13,14 @@ import {
 } from '../src/core';
 import { aad, deriveKey, fromBase64UrlNoPadding, ready } from '../src/core/crypto';
 import { localDate } from '../src/core/export';
-import { fixture, GOLDEN, GOLDEN_NO_MILESTONES, GOLDEN_SECOND_PASSPHRASE, loadSql } from './helpers';
+import {
+  fixture,
+  GOLDEN,
+  GOLDEN_COUNTS,
+  GOLDEN_NO_MILESTONES,
+  GOLDEN_SECOND_PASSPHRASE,
+  loadSql,
+} from './helpers';
 
 const PASSPHRASE = 'test';
 
@@ -248,5 +256,50 @@ describe('an archive whose words are locked with an earlier passphrase', () => {
     expect(backup.days).toHaveLength(4);
     expect(backup.days[3]!.answer!.text).toBe('Ran the whole thing without stopping.');
     backup.close();
+  });
+});
+
+describe('a golden archive with counts (spec §10.6)', () => {
+  let backup: OpenedBackup;
+
+  beforeAll(async () => {
+    await ready();
+    backup = await openBackup([fixture(GOLDEN_COUNTS)], PASSPHRASE, { loadSql });
+  });
+
+  it('passes every integrity check', () => {
+    expect(backup.integrity.problems).toEqual([]);
+  });
+
+  it('reads the half marathon’s counts: miles added up, and a mile time checked', () => {
+    const [current, earlier] = backup.aims;
+    expect(earlier!.counts).toEqual([]);
+    expect(current!.counts.map((count) => countLine(count))).toEqual([
+      'Miles run · 19.5 mi so far · goal 200 mi',
+      'Mile time · 10:18 latest · started 11:22 · goal 9:00',
+    ]);
+    const [miles, mileTime] = current!.counts;
+    expect(miles!.unreadable).toBe(false);
+    expect(miles!.entries.map((entry) => [entry.day, entry.fromCheckIn])).toEqual([
+      ['2026-10-26', true],
+      ['2026-10-28', false],
+    ]);
+    expect(mileTime!.kind).toBe('check');
+    expect(mileTime!.entries).toHaveLength(2);
+  });
+
+  it('exports each count with its entries', () => {
+    const files = unzipSync(backup.exportAll());
+    const markdownName = Object.keys(files).find((name) => name.endsWith('.md'))!;
+    const markdown = new TextDecoder().decode(files[markdownName]);
+    expect(markdown).toContain('- Miles run · 19.5 mi so far · goal 200 mi');
+    expect(markdown).toContain('  - 2026-10-26: +3 mi, at your check-in');
+    const jsonName = Object.keys(files).find((name) => name.endsWith('.json'))!;
+    const json = JSON.parse(new TextDecoder().decode(files[jsonName]));
+    expect(json.whereYoureHeaded[0].counts[1]).toMatchObject({
+      name: 'Mile time',
+      kind: 'check-it',
+      shown: 'Mile time · 10:18 latest · started 11:22 · goal 9:00',
+    });
   });
 });

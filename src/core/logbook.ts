@@ -1,3 +1,4 @@
+import { readCounts, type Count } from './counts';
 import { aad, open } from './crypto';
 import { asBytes, asNumber, asString, type BackupDatabase, type Row } from './database';
 import type { KeyRing } from './keys';
@@ -43,6 +44,8 @@ export type Aim = {
   closedAt: number | null;
   /** The journey it belongs to, from 2026-11-20; null before journeys. */
   journeyName: string | null;
+  /** Its counts, from 2026-11-27 (spec §10.6); empty before counts. */
+  counts: Count[];
   entry: Entry;
 };
 
@@ -211,12 +214,22 @@ export class LogbookBuilder {
        ${this.transcriptJoin()}
        ORDER BY m.created_at DESC, m.id DESC`,
     );
+    const counts = readCounts(
+      this.db,
+      this.keys,
+      rows.map((row) => ({
+        id: asString(row.milestone_id) ?? '',
+        createdAt: asNumber(row.milestone_created_at) ?? 0,
+        reachedAt: asNumber(row.reached_at),
+      })),
+    );
     const aims = rows.map((row) => ({
       id: asString(row.milestone_id) ?? '',
       createdAt: asNumber(row.milestone_created_at) ?? 0,
       reachedAt: asNumber(row.reached_at),
       closedAt: asNumber(row.closed_at),
       journeyName: asString(row.journey_name),
+      counts: counts.get(asString(row.milestone_id) ?? '') ?? [],
       focusedAt: asNumber(row.focused_at),
       setAside: asNumber(row.set_aside_at) !== null,
       entry: this.entryFrom(row, 'aim'),
@@ -261,6 +274,7 @@ export class LogbookBuilder {
         reachedAt: asNumber(row.did_goal) === 1 ? asNumber(row.confirmed_at) : null,
         closedAt: newer ? newer.createdAt : null,
         journeyName: null,
+        counts: [],
         entry,
       });
     }

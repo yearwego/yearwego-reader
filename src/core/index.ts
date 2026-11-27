@@ -16,6 +16,8 @@ export { ReaderError } from './errors';
 export type { ReaderErrorCode } from './errors';
 export { localDate, longDate, outcomeWords, timeOfDay } from './export';
 export type { Aim, Day, Entry, Outcome } from './logbook';
+export { countLine, countValue } from './counts';
+export type { Count, CountEntry, CountFormat, CountKind } from './counts';
 export type { IntegrityProblem, IntegrityReport } from './manifest';
 
 export type BackupInfo = {

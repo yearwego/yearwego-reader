@@ -7,6 +7,7 @@ Changes you can see in the YearWeGo Reader, newest first. Each released version 
 ### Added
 
 - Backups from the app’s journeys build show each milestone’s journey, and Where you’re headed is the milestone the app was working on. The download names each milestone’s journey too, with the others still open marked Open.
+- Each milestone shows its counts, such as books read or a mile time, with the total or the latest reading, where it started, and its goal. The download lists every count and each number entered, with the day and whether it came from a check-in.
 
 ### Changed
 
