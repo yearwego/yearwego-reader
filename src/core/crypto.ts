@@ -48,6 +48,41 @@ export function deriveKey(passphrase: string, salt: Uint8Array, params: KdfParam
   );
 }
 
+const PACKED_MAGIC = [0x59, 0x57, 0x47, 0x31];
+const PACKED_VERSION = 0x01;
+export const PACKED_HEADER_BYTES = 5;
+export const NONCE_BYTES = 24;
+export const TAG_BYTES = 16;
+
+export type PackedParts = { nonce: Uint8Array; ciphertext: Uint8Array };
+
+/** Splits a `YWG1` blob (spec §5.2): the 5-byte header, the 24-byte nonce, then ciphertext ‖ tag.
+ *  The sealed inner zip and, since 2026-11-27, every sealed column use it. */
+export function splitPacked(
+  blob: Uint8Array,
+): { ok: true; parts: PackedParts } | { ok: false; reason: 'too-short' | 'not-ours' | 'newer' } {
+  if (blob.length < PACKED_HEADER_BYTES + NONCE_BYTES + TAG_BYTES) return { ok: false, reason: 'too-short' };
+  if (PACKED_MAGIC.some((byte, index) => blob[index] !== byte)) return { ok: false, reason: 'not-ours' };
+  if (blob[4] !== PACKED_VERSION) return { ok: false, reason: 'newer' };
+  return {
+    ok: true,
+    parts: {
+      nonce: blob.subarray(PACKED_HEADER_BYTES, PACKED_HEADER_BYTES + NONCE_BYTES),
+      ciphertext: blob.subarray(PACKED_HEADER_BYTES + NONCE_BYTES),
+    },
+  };
+}
+
+/** A sealed column's nonce and ciphertext, in either layout (spec §10.5): backups up to the app's
+ *  1.0.0 (13) keep the nonce in a column of its own, later ones pack it into the value. Null when
+ *  the value can't be split. */
+export function sealedParts(value: Uint8Array | null, separateNonce: Uint8Array | null): PackedParts | null {
+  if (!value) return null;
+  if (separateNonce) return { nonce: separateNonce, ciphertext: value };
+  const split = splitPacked(value);
+  return split.ok ? split.parts : null;
+}
+
 /** Null when the tag does not verify: wrong key, wrong place, or damaged bytes. */
 export function open(
   key: Uint8Array,

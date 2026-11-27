@@ -10,9 +10,15 @@ Changes you can see in the YearWeGo Reader, newest first. Each released version 
 
 ### Changed
 
+- Opens backups from the newest YearWeGo builds, which keep each encrypted value in one piece with what it needs to open. Backups from earlier builds open as before.
+
 - Your passphrase opens a backup however you type the gaps between the words: spaces, long dashes, a full stop, or a line break, and with capitals, as the app accepts.
 
 - The browser tab shows the YearWeGo Y mark, the same icon as yearwego.com, in place of a plain green ring.
+
+### Fixed
+
+- Each answer shows the question it answered: after “I did it” in the app, How did you do it?, What are you glad you did?, What did you learn?, or How did it go?, and a journey’s why, its reason for being set aside, and the weekly look’s two questions.
 
 ## 2026-11-12
 

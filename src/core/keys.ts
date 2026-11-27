@@ -1,12 +1,22 @@
-import { aad, checksum, deriveKey, isSupportedKdf, normalizePassphrase, open, toHex, wipe } from './crypto';
+import {
+  aad,
+  checksum,
+  deriveKey,
+  isSupportedKdf,
+  normalizePassphrase,
+  open,
+  sealedParts,
+  toHex,
+  wipe,
+  type PackedParts,
+} from './crypto';
 import { asBytes, asString, type BackupDatabase } from './database';
 import { isOutOfMemory, ReaderError } from './errors';
 
 type KeyBackupRow = {
   id: string;
   cryptoKeyId: string;
-  encryptedKey: Uint8Array;
-  nonce: Uint8Array;
+  sealedRootKey: PackedParts;
   kdfSalt: Uint8Array;
   kdfParamsJson: string;
 };
@@ -26,17 +36,18 @@ function keyBackupRows(db: BackupDatabase, manifestRowId: string | null): KeyBac
   if (!db.hasTable('crypto_key_backups')) return [];
   const rows = db
     .all(
-      'SELECT id, crypto_key_id, encrypted_key, nonce, kdf_salt, kdf_params_json FROM crypto_key_backups',
+      `SELECT b.id, b.crypto_key_id, b.encrypted_key, ${db.column('crypto_key_backups', 'b', 'nonce', 'nonce')},
+              b.kdf_salt, b.kdf_params_json
+       FROM crypto_key_backups b`,
     )
     .flatMap((row): KeyBackupRow[] => {
       const id = asString(row.id);
       const cryptoKeyId = asString(row.crypto_key_id);
-      const encryptedKey = asBytes(row.encrypted_key);
-      const nonce = asBytes(row.nonce);
+      const sealedRootKey = sealedParts(asBytes(row.encrypted_key), asBytes(row.nonce));
       const kdfSalt = asBytes(row.kdf_salt);
       const kdfParamsJson = asString(row.kdf_params_json);
-      if (!id || !cryptoKeyId || !encryptedKey || !nonce || !kdfSalt || !kdfParamsJson) return [];
-      return [{ id, cryptoKeyId, encryptedKey, nonce, kdfSalt, kdfParamsJson }];
+      if (!id || !cryptoKeyId || !sealedRootKey || !kdfSalt || !kdfParamsJson) return [];
+      return [{ id, cryptoKeyId, sealedRootKey, kdfSalt, kdfParamsJson }];
     });
   const activeId = activeRootKeyId(db);
   const rank = (row: KeyBackupRow) => {
@@ -72,7 +83,12 @@ export function unlockRootKey(
     let backupKey: Uint8Array | null = null;
     try {
       backupKey = deriveKey(normalized, row.kdfSalt, params);
-      const rootKey = open(backupKey, row.nonce, row.encryptedKey, aad.keyBackup(row.cryptoKeyId));
+      const rootKey = open(
+        backupKey,
+        row.sealedRootKey.nonce,
+        row.sealedRootKey.ciphertext,
+        aad.keyBackup(row.cryptoKeyId),
+      );
       if (rootKey) return rootKey;
     } catch (error) {
       if (isOutOfMemory(error)) throw new ReaderError('out-of-memory');
@@ -85,7 +101,7 @@ export function unlockRootKey(
 }
 
 export class KeyRing {
-  private readonly rows = new Map<string, { encryptedKey: Uint8Array; nonce: Uint8Array; checksum: string | null }>();
+  private readonly rows = new Map<string, { sealedKey: PackedParts; checksum: string | null }>();
   private readonly opened = new Map<string, Uint8Array | null>();
   private readonly rootKey: Uint8Array;
 
@@ -93,14 +109,14 @@ export class KeyRing {
     this.rootKey = rootKey;
     if (!db.hasTable('crypto_keys')) return;
     for (const row of db.all(
-      "SELECT id, encrypted_key, nonce, checksum FROM crypto_keys WHERE type = 'data_encryption_key'",
+      `SELECT k.id, k.encrypted_key, ${db.column('crypto_keys', 'k', 'nonce', 'nonce')}, k.checksum
+       FROM crypto_keys k WHERE k.type = 'data_encryption_key'`,
     )) {
       const id = asString(row.id);
-      const encryptedKey = asBytes(row.encrypted_key);
-      const nonce = asBytes(row.nonce);
+      const sealedKey = sealedParts(asBytes(row.encrypted_key), asBytes(row.nonce));
       const sum = asBytes(row.checksum);
-      if (id && encryptedKey && nonce) {
-        this.rows.set(id, { encryptedKey, nonce, checksum: sum ? toHex(sum) : null });
+      if (id && sealedKey) {
+        this.rows.set(id, { sealedKey, checksum: sum ? toHex(sum) : null });
       }
     }
   }
@@ -111,7 +127,7 @@ export class KeyRing {
     const row = this.rows.get(cryptoKeyId);
     let key: Uint8Array | null = null;
     if (row) {
-      key = open(this.rootKey, row.nonce, row.encryptedKey, aad.dataKey(cryptoKeyId));
+      key = open(this.rootKey, row.sealedKey.nonce, row.sealedKey.ciphertext, aad.dataKey(cryptoKeyId));
       if (key && row.checksum !== null && checksum(key) !== row.checksum) {
         wipe(key);
         key = null;
