@@ -16,6 +16,10 @@ Changes you can see in the YearWeGo Reader, newest first. Each released version 
 
 - The browser tab shows the YearWeGo Y mark, the same icon as yearwego.com, in place of a plain green ring.
 
+### Fixed
+
+- Each answer shows the question it answered: after “I did it” in the app, How did you do it?, What are you glad you did?, What did you learn?, or How did it go?, and a journey’s why, its reason for being set aside, and the weekly look’s two questions.
+
 ## 2026-11-12
 
 ### Added
