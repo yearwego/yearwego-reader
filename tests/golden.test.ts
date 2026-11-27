@@ -84,6 +84,10 @@ describe('the golden archive made by the app’s backup code', () => {
     expect(earlier!.closedAt).toBe(current!.createdAt);
   });
 
+  it('names each milestone’s journey from its sealed name', () => {
+    expect(backup.aims.map((aim) => aim.journeyName)).toEqual(['Running', 'Running']);
+  });
+
   it('rebuilds each day: intention, did you do it, and the answer', () => {
     expect(backup.days.map((day) => day.outcome)).toEqual(['waiting', 'no-answer', 'didnt', 'did-it']);
     const [today, unanswered, missed, done] = backup.days;

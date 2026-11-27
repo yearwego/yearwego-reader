@@ -5010,6 +5010,15 @@ function sealedParts(value, separateNonce) {
 	const split = splitPacked(value);
 	return split.ok ? split.parts : null;
 }
+/** The text of a padded value (spec §8.2): libsodium's `sodium_pad` format, to 32-byte blocks.
+*  Null when the padding is malformed. */
+function unpadText(padded) {
+	try {
+		return new TextDecoder().decode(t.unpad(padded, 32));
+	} catch {
+		return null;
+	}
+}
 /** Null when the tag does not verify: wrong key, wrong place, or damaged bytes. */
 function open(key, nonce, ciphertext, aad) {
 	try {
@@ -5038,6 +5047,7 @@ var aad = {
 	keyBackup: (cryptoKeyId) => `v1|crypto_key_backup|${cryptoKeyId}`,
 	dataKey: (cryptoKeyId) => `v1|crypto_key.data_encryption_key|${cryptoKeyId}`,
 	transcript: (transcriptId) => `v1|transcript.text|${transcriptId}`,
+	journeyName: (journeyId) => `v1|journey.name|${journeyId}`,
 	audioChunk: (parts) => [
 		"v1",
 		"recording.audio.chunk",
@@ -6768,6 +6778,16 @@ function entrySelect(db, withTranscripts) {
 	else columns.push("NULL AS transcript_id", "NULL AS encrypted_text", "NULL AS text_nonce");
 	return columns.join(", ");
 }
+/** A journey's name, plain before 2026-11-27 and sealed since (spec §8.2, §10.5). */
+function journeySelect(db) {
+	const columns = db.columns("journeys");
+	if (!db.columns("journey_milestones").has("milestone_id")) return null;
+	if (columns.has("encrypted_name")) return `NULL AS journey_name, j.id AS journey_id, j.crypto_key_id AS journey_key_id,
+            j.encrypted_name AS encrypted_journey_name, j.set_aside_at AS set_aside_at`;
+	if (columns.has("name")) return `j.name AS journey_name, NULL AS journey_id, NULL AS journey_key_id,
+            NULL AS encrypted_journey_name, j.set_aside_at AS set_aside_at`;
+	return null;
+}
 var LogbookBuilder = class {
 	db;
 	keys;
@@ -6858,14 +6878,28 @@ var LogbookBuilder = class {
 		const milestoneColumns = this.db.columns("milestones");
 		return milestoneColumns.has("recording_id") && milestoneColumns.has("closed_at") && !milestoneColumns.has("session_id") ? this.aimsFromMilestones() : this.aimsFromSessions();
 	}
+	/** Text in the sealed column was never sealed and reads as it is. Null when it won't open. */
+	journeyNameFrom(row) {
+		const plain = row.journey_name ?? row.encrypted_journey_name;
+		if (typeof plain === "string") return plain;
+		const blob = asBytes(row.encrypted_journey_name);
+		const journeyId = asString(row.journey_id);
+		const keyId = asString(row.journey_key_id);
+		if (!blob || !journeyId || !keyId) return null;
+		const split = splitPacked(blob);
+		const key = this.keys.dataKey(keyId);
+		if (!split.ok || !key) return null;
+		const padded = open(key, split.parts.nonce, split.parts.ciphertext, aad.journeyName(journeyId));
+		return padded ? unpadText(padded) : null;
+	}
 	aimsFromMilestones() {
-		const hasJourneys = this.db.columns("journeys").has("name") && this.db.columns("journey_milestones").has("milestone_id");
-		const journeySelect = hasJourneys ? "j.name AS journey_name, j.set_aside_at AS set_aside_at" : "NULL AS journey_name, NULL AS set_aside_at";
+		const journeyColumns = journeySelect(this.db);
+		const hasJourneys = journeyColumns !== null;
 		const journeyJoin = hasJourneys ? `LEFT JOIN journey_milestones jm ON jm.milestone_id = m.id
          LEFT JOIN journeys j ON j.id = jm.journey_id` : "";
 		const aims = this.db.all(`SELECT m.id AS milestone_id, m.created_at AS milestone_created_at, m.reached_at AS reached_at,
               m.closed_at AS closed_at, ${this.db.column("milestones", "m", "focused_at", "focused_at")},
-              ${journeySelect}, ${entrySelect(this.db, this.withTranscripts)}
+              ${journeyColumns ?? "NULL AS set_aside_at"}, ${entrySelect(this.db, this.withTranscripts)}
        FROM milestones m
        JOIN recordings r ON r.id = m.recording_id
        JOIN sessions s ON s.id = r.session_id
@@ -6876,7 +6910,7 @@ var LogbookBuilder = class {
 			createdAt: asNumber(row.milestone_created_at) ?? 0,
 			reachedAt: asNumber(row.reached_at),
 			closedAt: asNumber(row.closed_at),
-			journeyName: asString(row.journey_name),
+			journeyName: this.journeyNameFrom(row),
 			focusedAt: asNumber(row.focused_at),
 			setAside: asNumber(row.set_aside_at) !== null,
 			entry: this.entryFrom(row, "aim")
