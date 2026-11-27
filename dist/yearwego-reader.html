@@ -4968,6 +4968,48 @@ function isSupportedKdf(params) {
 function deriveKey(passphrase, salt, params) {
 	return t.crypto_pwhash(params.keyLength, passphrase, salt, params.opsLimit, params.memLimit, params.algorithm);
 }
+var PACKED_MAGIC = [
+	89,
+	87,
+	71,
+	49
+];
+var PACKED_VERSION = 1;
+/** Splits a `YWG1` blob (spec §5.2): the 5-byte header, the 24-byte nonce, then ciphertext ‖ tag.
+*  The sealed inner zip and, since 2026-11-27, every sealed column use it. */
+function splitPacked(blob) {
+	if (blob.length < 45) return {
+		ok: false,
+		reason: "too-short"
+	};
+	if (PACKED_MAGIC.some((byte, index) => blob[index] !== byte)) return {
+		ok: false,
+		reason: "not-ours"
+	};
+	if (blob[4] !== PACKED_VERSION) return {
+		ok: false,
+		reason: "newer"
+	};
+	return {
+		ok: true,
+		parts: {
+			nonce: blob.subarray(5, 29),
+			ciphertext: blob.subarray(29)
+		}
+	};
+}
+/** A sealed column's nonce and ciphertext, in either layout (spec §10.5): backups up to the app's
+*  1.0.0 (13) keep the nonce in a column of its own, later ones pack it into the value. Null when
+*  the value can't be split. */
+function sealedParts(value, separateNonce) {
+	if (!value) return null;
+	if (separateNonce) return {
+		nonce: separateNonce,
+		ciphertext: value
+	};
+	const split = splitPacked(value);
+	return split.ok ? split.parts : null;
+}
 /** Null when the tag does not verify: wrong key, wrong place, or damaged bytes. */
 function open(key, nonce, ciphertext, aad) {
 	try {
@@ -6077,14 +6119,6 @@ function writeZip(files) {
 }
 var HEADER_SUFFIX = ".yearwego.header.json";
 var SEALED_SUFFIX = ".yearwego.data.encrypted";
-var BLOB_MAGIC = [
-	89,
-	87,
-	71,
-	49
-];
-var BLOB_VERSION = 1;
-var BLOB_HEADER_BYTES = 5;
 /** One zip, or its two files after something unzipped it. */
 function locateArchiveParts(files) {
 	let headerBytes = null;
@@ -6119,13 +6153,13 @@ function parseHeader(bytes) {
 	};
 }
 function splitBlob(sealed) {
-	if (sealed.length < 45) throw new ReaderError("damaged", "The encrypted data is too short.");
-	for (let index = 0; index < BLOB_MAGIC.length; index += 1) if (sealed[index] !== BLOB_MAGIC[index]) throw new ReaderError("not-a-backup", "The encrypted data is not a YearWeGo blob.");
-	if (sealed[4] !== BLOB_VERSION) throw new ReaderError("unsupported-version", `Blob version ${sealed[4]}.`);
-	return {
-		nonce: sealed.subarray(BLOB_HEADER_BYTES, 29),
-		ciphertext: sealed.subarray(29)
-	};
+	const split = splitPacked(sealed);
+	if (split.ok) return split.parts;
+	switch (split.reason) {
+		case "too-short": throw new ReaderError("damaged", "The encrypted data is too short.");
+		case "not-ours": throw new ReaderError("not-a-backup", "The encrypted data is not a YearWeGo blob.");
+		case "newer": throw new ReaderError("unsupported-version", `Blob version ${sealed[4]}.`);
+	}
 }
 async function unsealArchive(files, passphrase, onProgress = () => {}) {
 	await ready();
@@ -6561,19 +6595,19 @@ function activeRootKeyId(db) {
 /** The manifest’s row first, then the active root key’s, then any other. */
 function keyBackupRows(db, manifestRowId) {
 	if (!db.hasTable("crypto_key_backups")) return [];
-	const rows = db.all("SELECT id, crypto_key_id, encrypted_key, nonce, kdf_salt, kdf_params_json FROM crypto_key_backups").flatMap((row) => {
+	const rows = db.all(`SELECT b.id, b.crypto_key_id, b.encrypted_key, ${db.column("crypto_key_backups", "b", "nonce", "nonce")},
+              b.kdf_salt, b.kdf_params_json
+       FROM crypto_key_backups b`).flatMap((row) => {
 		const id = asString(row.id);
 		const cryptoKeyId = asString(row.crypto_key_id);
-		const encryptedKey = asBytes(row.encrypted_key);
-		const nonce = asBytes(row.nonce);
+		const sealedRootKey = sealedParts(asBytes(row.encrypted_key), asBytes(row.nonce));
 		const kdfSalt = asBytes(row.kdf_salt);
 		const kdfParamsJson = asString(row.kdf_params_json);
-		if (!id || !cryptoKeyId || !encryptedKey || !nonce || !kdfSalt || !kdfParamsJson) return [];
+		if (!id || !cryptoKeyId || !sealedRootKey || !kdfSalt || !kdfParamsJson) return [];
 		return [{
 			id,
 			cryptoKeyId,
-			encryptedKey,
-			nonce,
+			sealedRootKey,
 			kdfSalt,
 			kdfParamsJson
 		}];
@@ -6602,7 +6636,7 @@ function unlockRootKey(db, passphrase, manifestRowId) {
 		let backupKey = null;
 		try {
 			backupKey = deriveKey(normalized, row.kdfSalt, params);
-			const rootKey = open(backupKey, row.nonce, row.encryptedKey, aad.keyBackup(row.cryptoKeyId));
+			const rootKey = open(backupKey, row.sealedRootKey.nonce, row.sealedRootKey.ciphertext, aad.keyBackup(row.cryptoKeyId));
 			if (rootKey) return rootKey;
 		} catch (error) {
 			if (isOutOfMemory(error)) throw new ReaderError("out-of-memory");
@@ -6620,14 +6654,13 @@ var KeyRing = class {
 	constructor(db, rootKey) {
 		this.rootKey = rootKey;
 		if (!db.hasTable("crypto_keys")) return;
-		for (const row of db.all("SELECT id, encrypted_key, nonce, checksum FROM crypto_keys WHERE type = 'data_encryption_key'")) {
+		for (const row of db.all(`SELECT k.id, k.encrypted_key, ${db.column("crypto_keys", "k", "nonce", "nonce")}, k.checksum
+       FROM crypto_keys k WHERE k.type = 'data_encryption_key'`)) {
 			const id = asString(row.id);
-			const encryptedKey = asBytes(row.encrypted_key);
-			const nonce = asBytes(row.nonce);
+			const sealedKey = sealedParts(asBytes(row.encrypted_key), asBytes(row.nonce));
 			const sum = asBytes(row.checksum);
-			if (id && encryptedKey && nonce) this.rows.set(id, {
-				encryptedKey,
-				nonce,
+			if (id && sealedKey) this.rows.set(id, {
+				sealedKey,
 				checksum: sum ? toHex(sum) : null
 			});
 		}
@@ -6638,7 +6671,7 @@ var KeyRing = class {
 		const row = this.rows.get(cryptoKeyId);
 		let key = null;
 		if (row) {
-			key = open(this.rootKey, row.nonce, row.encryptedKey, aad.dataKey(cryptoKeyId));
+			key = open(this.rootKey, row.sealedKey.nonce, row.sealedKey.ciphertext, aad.dataKey(cryptoKeyId));
 			if (key && row.checksum !== null && checksum(key) !== row.checksum) {
 				wipe(key);
 				key = null;
@@ -6659,6 +6692,10 @@ var QUESTION_BY_KEY = {
 	"core.setGoal": "Today, I’ll…",
 	"core.setGoal.smallestStep": "My smallest step today is…",
 	"core.checkIn.celebrate": "What are you proud of?",
+	"core.checkIn.celebrate.how": "How did you do it?",
+	"core.checkIn.celebrate.glad": "What are you glad you did?",
+	"core.checkIn.celebrate.learned": "What did you learn?",
+	"core.checkIn.celebrate.open": "How did it go?",
 	"core.checkIn.learn": "What got in the way?",
 	"compass.setGoal": "What matters to you in the next 30 days?",
 	"compass.refine": "What matters most for the next 30 days?",
@@ -6666,7 +6703,11 @@ var QUESTION_BY_KEY = {
 	"compass.checkIn.learn": "What got in the way, and what will you change?",
 	"horizon.setGoal": "What matters to you in the year ahead?",
 	"horizon.reInvite": "A new year. What matters to you now?",
-	"horizon.reflect": "What still matters to you, what fell away, and why?"
+	"horizon.reflect": "What still matters to you, what fell away, and why?",
+	"journey.why": "Why does it matter to you?",
+	"journey.setAside": "Why are you setting it aside?",
+	"week.stoodOut": "What stood out about your week?",
+	"week.hardest": "What feels hardest to start?"
 };
 function fallbackKey(flow, recordingType) {
 	if (flow === "aim") return recordingType === "goal" ? "aim.want" : null;
@@ -6723,7 +6764,7 @@ function entrySelect(db, withTranscripts) {
 		"r.crypto_key_id AS crypto_key_id",
 		db.column("recordings", "r", "prompt_key", "prompt_key")
 	];
-	if (withTranscripts) columns.push("t.id AS transcript_id", "t.encrypted_text AS encrypted_text", "t.text_nonce AS text_nonce");
+	if (withTranscripts) columns.push("t.id AS transcript_id", "t.encrypted_text AS encrypted_text", db.column("transcripts", "t", "text_nonce", "text_nonce"));
 	else columns.push("NULL AS transcript_id", "NULL AS encrypted_text", "NULL AS text_nonce");
 	return columns.join(", ");
 }
@@ -6753,10 +6794,10 @@ var LogbookBuilder = class {
 		let textProblem = "not-transcribed";
 		const transcriptId = asString(row.transcript_id);
 		const encryptedText = asBytes(row.encrypted_text);
-		const textNonce = asBytes(row.text_nonce);
-		if (transcriptId && encryptedText && textNonce) {
+		if (transcriptId && encryptedText) {
+			const sealed = sealedParts(encryptedText, asBytes(row.text_nonce));
 			const key = this.keys.dataKey(cryptoKeyId);
-			const plaintext = key ? open(key, textNonce, encryptedText, aad.transcript(transcriptId)) : null;
+			const plaintext = key && sealed ? open(key, sealed.nonce, sealed.ciphertext, aad.transcript(transcriptId)) : null;
 			if (plaintext) {
 				text = new TextDecoder().decode(plaintext);
 				textProblem = null;

@@ -18,11 +18,12 @@ import {
   buildMarkdown,
   type ExportSource,
 } from "../src/core/export";
-import { fixture, GOLDEN, loadSql } from "./helpers";
+import { fixture, GOLDEN_SEPARATE_NONCES, loadSql } from "./helpers";
 
 const PASSPHRASE = "test";
 
-/** The golden backup with its database changed, sealed the way the app seals it. */
+/** The golden backup from builds 12 and 13 (separate nonce columns, before journeys reached it)
+ *  with its database changed, sealed the way the app seals it. */
 async function withDatabase(
   archive: UnsealedArchive,
   change: (run: (sql: string) => void) => void,
@@ -54,7 +55,7 @@ async function withDatabase(
   sealed.set([0x59, 0x57, 0x47, 0x31, 0x01]);
   sealed.set(nonce, 5);
   sealed.set(ciphertext, 29);
-  const original = fixture(GOLDEN);
+  const original = fixture(GOLDEN_SEPARATE_NONCES);
   const outer = unzipSync(original.bytes);
   const sealedName = Object.keys(outer).find((name) =>
     name.endsWith(".yearwego.data.encrypted"),
@@ -78,7 +79,7 @@ describe("a backup from the journeys build", () => {
 
   beforeAll(async () => {
     await ready();
-    archive = await unsealArchive([fixture(GOLDEN)], PASSPHRASE);
+    archive = await unsealArchive([fixture(GOLDEN_SEPARATE_NONCES)], PASSPHRASE);
   });
 
   /** Both golden milestones open, each in its own journey, the older one focused last. */
@@ -161,7 +162,7 @@ describe("a backup from the journeys build", () => {
   });
 
   it("leaves a backup from before journeys as it was", async () => {
-    const opened = await openBackup([fixture(GOLDEN)], PASSPHRASE, { loadSql });
+    const opened = await openBackup([fixture(GOLDEN_SEPARATE_NONCES)], PASSPHRASE, { loadSql });
     expect(opened.aims.map((aim) => aim.journeyName)).toEqual([null, null]);
     expect(opened.aims[0]!.entry.text).toBe(
       "I want to run a half marathon this spring and cross the finish line.",

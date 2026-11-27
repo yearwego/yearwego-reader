@@ -12,7 +12,14 @@ import {
 } from '../src/core';
 import { aad, deriveKey, fromBase64UrlNoPadding, ready } from '../src/core/crypto';
 import { localDate } from '../src/core/export';
-import { fixture, GOLDEN, GOLDEN_NO_MILESTONES, GOLDEN_SECOND_PASSPHRASE, loadSql } from './helpers';
+import {
+  fixture,
+  GOLDEN,
+  GOLDEN_NO_MILESTONES,
+  GOLDEN_SECOND_PASSPHRASE,
+  GOLDEN_SEPARATE_NONCES,
+  loadSql,
+} from './helpers';
 
 const PASSPHRASE = 'test';
 
@@ -248,5 +255,44 @@ describe('an archive whose words are locked with an earlier passphrase', () => {
     expect(backup.days).toHaveLength(4);
     expect(backup.days[3]!.answer!.text).toBe('Ran the whole thing without stopping.');
     backup.close();
+  });
+});
+
+describe('backups from before the app packed each nonce into its sealed value', () => {
+  let packed: OpenedBackup;
+  let separate: OpenedBackup;
+
+  beforeAll(async () => {
+    packed = await openBackup([fixture(GOLDEN)], PASSPHRASE, { loadSql });
+    separate = await openBackup([fixture(GOLDEN_SEPARATE_NONCES)], PASSPHRASE, { loadSql });
+  });
+
+  it('keep the nonce columns, which the packed golden no longer has', async () => {
+    const columnsOf = async (name: string, table: string) => {
+      const archive = await unsealArchive([fixture(name)], PASSPHRASE);
+      const SQL = await loadSql();
+      const dbPath = [...archive.entries.keys()].find((path) => path.endsWith('.yearwego.backup.db'))!;
+      const db = new SQL.Database(archive.entries.get(dbPath));
+      const columns = db.exec(`PRAGMA table_info(${table})`)[0]!.values.map((row) => String(row[1]));
+      db.close();
+      return columns;
+    };
+    expect(await columnsOf(GOLDEN_SEPARATE_NONCES, 'transcripts')).toContain('text_nonce');
+    expect(await columnsOf(GOLDEN_SEPARATE_NONCES, 'crypto_keys')).toContain('nonce');
+    expect(await columnsOf(GOLDEN, 'transcripts')).not.toContain('text_nonce');
+    expect(await columnsOf(GOLDEN, 'crypto_keys')).not.toContain('nonce');
+    expect(await columnsOf(GOLDEN, 'crypto_key_backups')).not.toContain('nonce');
+  });
+
+  it('read the same words, answers, and recordings in either layout', () => {
+    const words = (backup: OpenedBackup) => ({
+      aims: backup.aims.map((aim) => aim.entry.text),
+      days: backup.days.map((day) => [day.outcome, day.intention?.text ?? null, day.answer?.text ?? null]),
+      problems: backup.days.map((day) => day.intention?.textProblem ?? null),
+    });
+    expect(words(separate)).toEqual(words(packed));
+    expect(separate.integrity.ok).toBe(true);
+    const result = separate.decryptAudio(separate.days[3]!.intention!);
+    expect(result.ok).toBe(true);
   });
 });
