@@ -2,7 +2,7 @@ import sodium from 'libsodium-wrappers-sumo';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseHeader } from '../src/core/archive';
 import { decryptChunkedRecording } from '../src/core/audio';
-import { aad, checksum, deriveKey, hash32, open, openPacked, ready, unpad } from '../src/core/crypto';
+import { aad, checksum, deriveKey, hash32, open, ready, sealedParts, splitPacked, unpad } from '../src/core/crypto';
 import { vectors } from './helpers';
 
 const v = vectors();
@@ -59,11 +59,15 @@ describe('known-answer vectors from the app (spec/vectors.json)', () => {
     expect(aad.milestoneMeasureTarget(count.milestone_measure_id)).toBe(count.target_total.aad);
     for (const field of ['name', 'value', 'target_total'] as const) {
       const vector = count[field];
-      const padded = openPacked(bytes(count.dek_hex), bytes(vector.packed_hex), vector.aad);
+      const openCount = (aadText: string) => {
+        const parts = sealedParts(bytes(vector.packed_hex), null);
+        return parts && open(bytes(count.dek_hex), parts.nonce, parts.ciphertext, aadText);
+      };
+      const padded = openCount(vector.aad);
       expect(padded && hex(padded)).toBe(vector.padded_hex);
       expect(new TextDecoder().decode(unpad(padded!)!)).toBe(vector.text);
       // Bound to its row: the same blob under another row's AAD doesn't open.
-      expect(openPacked(bytes(count.dek_hex), bytes(vector.packed_hex), `${vector.aad}x`)).toBeNull();
+      expect(openCount(`${vector.aad}x`)).toBeNull();
     }
   });
 
@@ -72,6 +76,41 @@ describe('known-answer vectors from the app (spec/vectors.json)', () => {
     expect(aad.transcript(row.transcript_id)).toBe(row.aad);
     const plaintext = open(bytes(row.dek_hex), bytes(row.text_nonce_hex), bytes(row.encrypted_text_hex), row.aad);
     expect(new TextDecoder().decode(plaintext!)).toBe(row.text);
+  });
+
+  it('opens each sealed column in the packed layout too', () => {
+    const backupKey = bytes(v.key_backup.key_hex);
+    const rootKey = sealedParts(bytes(v.key_backup.packed_hex), null)!;
+    expect(hex(open(backupKey, rootKey.nonce, rootKey.ciphertext, v.key_backup.aad)!)).toBe(
+      v.key_backup.root_key_hex,
+    );
+
+    const dataKey = sealedParts(bytes(v.data_encryption_key.packed_hex), null)!;
+    expect(
+      hex(open(bytes(v.data_encryption_key.root_key_hex), dataKey.nonce, dataKey.ciphertext, v.data_encryption_key.aad)!),
+    ).toBe(v.data_encryption_key.dek_hex);
+
+    const text = sealedParts(bytes(v.transcript.packed_hex), null)!;
+    expect(
+      new TextDecoder().decode(open(bytes(v.transcript.dek_hex), text.nonce, text.ciphertext, v.transcript.aad)!),
+    ).toBe(v.transcript.text);
+  });
+
+  it('prefers a separate nonce column over splitting the value', () => {
+    const row = v.transcript;
+    const parts = sealedParts(bytes(row.encrypted_text_hex), bytes(row.text_nonce_hex))!;
+    expect(hex(parts.nonce)).toBe(row.text_nonce_hex);
+    expect(hex(parts.ciphertext)).toBe(row.encrypted_text_hex);
+  });
+
+  it('refuses a value that is not a packed blob, without throwing', () => {
+    const packed = bytes(v.transcript.packed_hex);
+    expect(splitPacked(packed.subarray(0, 40))).toEqual({ ok: false, reason: 'too-short' });
+    expect(splitPacked(bytes(v.transcript.encrypted_text_hex))).toEqual({ ok: false, reason: 'not-ours' });
+    const newer = packed.slice();
+    newer[4] = 0x02;
+    expect(splitPacked(newer)).toEqual({ ok: false, reason: 'newer' });
+    expect(sealedParts(newer, null)).toBeNull();
   });
 
   it('builds every audio chunk AAD the same way', () => {

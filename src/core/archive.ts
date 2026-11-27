@@ -6,8 +6,10 @@ import {
   open,
   normalizePassphrase,
   ready,
+  splitPacked,
   wipe,
   type KdfParams,
+  type PackedParts,
 } from './crypto';
 import { isOutOfMemory, ReaderError } from './errors';
 import { verifyManifest, type IntegrityReport, type Manifest } from './manifest';
@@ -17,11 +19,6 @@ export const BACKUP_FORMAT_VERSION = 1;
 
 const HEADER_SUFFIX = '.yearwego.header.json';
 const SEALED_SUFFIX = '.yearwego.data.encrypted';
-const BLOB_MAGIC = [0x59, 0x57, 0x47, 0x31];
-const BLOB_VERSION = 0x01;
-const BLOB_HEADER_BYTES = 5;
-const NONCE_BYTES = 24;
-const TAG_BYTES = 16;
 
 export type ArchiveFile = { name: string; bytes: Uint8Array };
 
@@ -96,22 +93,17 @@ export function parseHeader(bytes: Uint8Array): BackupHeader {
   return { salt: parsed.salt, backupFormatVersion: version, kdfParams: parsed.kdfParams };
 }
 
-function splitBlob(sealed: Uint8Array): { nonce: Uint8Array; ciphertext: Uint8Array } {
-  if (sealed.length < BLOB_HEADER_BYTES + NONCE_BYTES + TAG_BYTES) {
-    throw new ReaderError('damaged', 'The encrypted data is too short.');
-  }
-  for (let index = 0; index < BLOB_MAGIC.length; index += 1) {
-    if (sealed[index] !== BLOB_MAGIC[index]) {
+function splitBlob(sealed: Uint8Array): PackedParts {
+  const split = splitPacked(sealed);
+  if (split.ok) return split.parts;
+  switch (split.reason) {
+    case 'too-short':
+      throw new ReaderError('damaged', 'The encrypted data is too short.');
+    case 'not-ours':
       throw new ReaderError('not-a-backup', 'The encrypted data is not a YearWeGo blob.');
-    }
+    case 'newer':
+      throw new ReaderError('unsupported-version', `Blob version ${sealed[4]}.`);
   }
-  if (sealed[4] !== BLOB_VERSION) {
-    throw new ReaderError('unsupported-version', `Blob version ${sealed[4]}.`);
-  }
-  return {
-    nonce: sealed.subarray(BLOB_HEADER_BYTES, BLOB_HEADER_BYTES + NONCE_BYTES),
-    ciphertext: sealed.subarray(BLOB_HEADER_BYTES + NONCE_BYTES),
-  };
 }
 
 export async function unsealArchive(

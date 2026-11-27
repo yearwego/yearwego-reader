@@ -1,4 +1,4 @@
-import { aad, openPacked, unpad, wipe } from './crypto';
+import { aad, open, sealedParts, unpad, wipe } from './crypto';
 import { asBytes, asNumber, asString, type BackupDatabase } from './database';
 import type { KeyRing } from './keys';
 
@@ -46,8 +46,11 @@ function localDay(ms: number): string {
 }
 
 function openText(key: Uint8Array | null, packed: Uint8Array | null, aadText: string): string | null {
-  if (!key || !packed) return null;
-  const padded = openPacked(key, packed, aadText);
+  if (!key) return null;
+  // Counts arrived after nonce packing, so their values are always packed.
+  const parts = sealedParts(packed, null);
+  if (!parts) return null;
+  const padded = open(key, parts.nonce, parts.ciphertext, aadText);
   if (!padded) return null;
   const plaintext = unpad(padded);
   const text = plaintext ? new TextDecoder().decode(plaintext) : null;

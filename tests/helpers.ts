@@ -23,4 +23,6 @@ export function vectors() {
 export const GOLDEN = 'golden.yearwego.backup.zip';
 export const GOLDEN_NO_MILESTONES = 'golden-no-milestones.yearwego.backup.zip';
 export const GOLDEN_SECOND_PASSPHRASE = 'golden-second-passphrase.yearwego.backup.zip';
+/** Made by the app up to 1.0.0 (13), when each sealed value's nonce sat in a column of its own. */
+export const GOLDEN_SEPARATE_NONCES = 'golden-separate-nonces.yearwego.backup.zip';
 export const GOLDEN_COUNTS = 'golden-counts.yearwego.backup.zip';

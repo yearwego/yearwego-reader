@@ -1,10 +1,14 @@
-// The questions, from the app’s features/loops/content/prompts.ts (2026-10-29).
+// The questions, from the app’s features/loops/content/prompts.ts (spec §10.4, 2026-11-26).
 
 const QUESTION_BY_KEY: Record<string, string> = {
   'aim.want': 'I want…',
   'core.setGoal': 'Today, I’ll…',
   'core.setGoal.smallestStep': 'My smallest step today is…',
   'core.checkIn.celebrate': 'What are you proud of?',
+  'core.checkIn.celebrate.how': 'How did you do it?',
+  'core.checkIn.celebrate.glad': 'What are you glad you did?',
+  'core.checkIn.celebrate.learned': 'What did you learn?',
+  'core.checkIn.celebrate.open': 'How did it go?',
   'core.checkIn.learn': 'What got in the way?',
   'compass.setGoal': 'What matters to you in the next 30 days?',
   'compass.refine': 'What matters most for the next 30 days?',
@@ -13,6 +17,10 @@ const QUESTION_BY_KEY: Record<string, string> = {
   'horizon.setGoal': 'What matters to you in the year ahead?',
   'horizon.reInvite': 'A new year. What matters to you now?',
   'horizon.reflect': 'What still matters to you, what fell away, and why?',
+  'journey.why': 'Why does it matter to you?',
+  'journey.setAside': 'Why are you setting it aside?',
+  'week.stoodOut': 'What stood out about your week?',
+  'week.hardest': 'What feels hardest to start?',
 };
 
 function fallbackKey(flow: string, recordingType: string): string | null {

@@ -1,5 +1,5 @@
 import { readCounts, type Count } from './counts';
-import { aad, open } from './crypto';
+import { aad, open, sealedParts } from './crypto';
 import { asBytes, asNumber, asString, type BackupDatabase, type Row } from './database';
 import type { KeyRing } from './keys';
 import { checkInQuestionFor, questionFor } from './prompts';
@@ -75,7 +75,11 @@ function entrySelect(db: BackupDatabase, withTranscripts: boolean): string {
     db.column('recordings', 'r', 'prompt_key', 'prompt_key'),
   ];
   if (withTranscripts) {
-    columns.push('t.id AS transcript_id', 't.encrypted_text AS encrypted_text', 't.text_nonce AS text_nonce');
+    columns.push(
+      't.id AS transcript_id',
+      't.encrypted_text AS encrypted_text',
+      db.column('transcripts', 't', 'text_nonce', 'text_nonce'),
+    );
   } else {
     columns.push('NULL AS transcript_id', 'NULL AS encrypted_text', 'NULL AS text_nonce');
   }
@@ -112,10 +116,11 @@ export class LogbookBuilder {
     let textProblem: Entry['textProblem'] = 'not-transcribed';
     const transcriptId = asString(row.transcript_id);
     const encryptedText = asBytes(row.encrypted_text);
-    const textNonce = asBytes(row.text_nonce);
-    if (transcriptId && encryptedText && textNonce) {
+    if (transcriptId && encryptedText) {
+      const sealed = sealedParts(encryptedText, asBytes(row.text_nonce));
       const key = this.keys.dataKey(cryptoKeyId);
-      const plaintext = key ? open(key, textNonce, encryptedText, aad.transcript(transcriptId)) : null;
+      const plaintext =
+        key && sealed ? open(key, sealed.nonce, sealed.ciphertext, aad.transcript(transcriptId)) : null;
       if (plaintext) {
         text = new TextDecoder().decode(plaintext);
         textProblem = null;
