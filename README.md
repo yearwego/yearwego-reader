@@ -79,7 +79,7 @@ npm run verify -- dist/yearwego-reader.html   # checks a built page; add --rebui
 - `src/core/` is the reader itself and `src/ui/` the one page (see **How to audit**).
 - `scripts/` builds the page: license notices, the WebAssembly table, and `verify`.
 - `tests/` runs the core in Node against `spec/vectors.json` and the archives in `fixtures/`.
-- `fixtures/` holds golden archives made by the app’s own backup code with made-up entries and the passphrase `TEST`. They contain no one’s real data.
+- `fixtures/` holds golden archives made by the app’s own backup code with made-up entries and the passphrase `TEST`. They contain no one’s real data. `golden-separate-nonces` comes from the app up to 1.0.0 (13), before each sealed value’s nonce moved into the value itself (spec §10.5); the others are current.
 - `netlify.toml` publishes the committed `dist/` to reader.yearwego.com as is, with no build on Netlify. To update the live page, rebuild and commit `dist/`.
 
 Pinned libraries: libsodium.js (sumo build, for Argon2id), sql.js (SQLite in WebAssembly), and fflate (zip). The page uses yearwego.com’s fonts, Newsreader, IBM Plex Sans, and Space Mono (latin subsets from Fontsource, SIL Open Font License), and Lucide icons (ISC). The build reads each library’s own license file and puts the texts in the page, under **Licenses** at the foot, and in a comment at the top of the file; it fails if anything bundled has no license notice.
