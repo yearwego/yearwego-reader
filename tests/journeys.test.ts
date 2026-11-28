@@ -18,15 +18,16 @@ import {
   buildMarkdown,
   type ExportSource,
 } from "../src/core/export";
-import { fixture, GOLDEN_SEPARATE_NONCES, loadSql } from "./helpers";
+import { fixture, GOLDEN, GOLDEN_SEPARATE_NONCES, loadSql } from "./helpers";
 
 const PASSPHRASE = "test";
 
-/** The golden backup from builds 12 and 13 (separate nonce columns, before journeys reached it)
- *  with its database changed, sealed the way the app seals it. */
+/** A golden backup (by default the one from builds 12 and 13: separate nonce columns, before
+ *  journeys reached it) with its database changed, sealed the way the app seals it. */
 async function withDatabase(
   archive: UnsealedArchive,
   change: (run: (sql: string) => void) => void,
+  base = GOLDEN_SEPARATE_NONCES,
 ) {
   const SQL = await loadSql();
   const inner: Record<string, Uint8Array> = Object.fromEntries(archive.entries);
@@ -55,7 +56,7 @@ async function withDatabase(
   sealed.set([0x59, 0x57, 0x47, 0x31, 0x01]);
   sealed.set(nonce, 5);
   sealed.set(ciphertext, 29);
-  const original = fixture(GOLDEN_SEPARATE_NONCES);
+  const original = fixture(base);
   const outer = unzipSync(original.bytes);
   const sealedName = Object.keys(outer).find((name) =>
     name.endsWith(".yearwego.data.encrypted"),
@@ -167,6 +168,53 @@ describe("a backup from the journeys build", () => {
     expect(opened.aims[0]!.entry.text).toBe(
       "I want to run a half marathon this spring and cross the finish line.",
     );
+    opened.close();
+  });
+});
+
+describe("a backup made since journey names were sealed", () => {
+  let archive: UnsealedArchive;
+
+  beforeAll(async () => {
+    await ready();
+    archive = await unsealArchive([fixture(GOLDEN)], PASSPHRASE);
+  });
+
+  it("opens each journey’s sealed name", async () => {
+    const opened = await openBackup([fixture(GOLDEN)], PASSPHRASE, { loadSql });
+    expect(opened.aims.map((aim) => aim.journeyName)).toEqual([
+      "Running",
+      "Running",
+    ]);
+    opened.close();
+  });
+
+  it("shows no name for a sealed name copied onto another journey", async () => {
+    const file = await withDatabase(
+      archive,
+      (run) =>
+        run(`UPDATE journeys SET encrypted_name =
+               (SELECT other.encrypted_name FROM journeys other WHERE other.id <> journeys.id)`),
+      GOLDEN,
+    );
+    const opened = await openBackup([file], PASSPHRASE, { loadSql });
+    expect(opened.aims.map((aim) => aim.journeyName)).toEqual([null, null]);
+    expect(opened.aims[0]!.entry.text).toBe(
+      "I want to run a half marathon this spring and cross the finish line.",
+    );
+    opened.close();
+  });
+
+  it("reads a name the app has not sealed yet as it is", async () => {
+    const file = await withDatabase(
+      archive,
+      (run) =>
+        run(`UPDATE journeys SET encrypted_name = 'Running, not yet sealed'
+             WHERE id IN (SELECT journey_id FROM journey_milestones)`),
+      GOLDEN,
+    );
+    const opened = await openBackup([file], PASSPHRASE, { loadSql });
+    expect(opened.aims[0]!.journeyName).toBe("Running, not yet sealed");
     opened.close();
   });
 });

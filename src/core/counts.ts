@@ -1,4 +1,4 @@
-import { aad, open, sealedParts, unpad, wipe } from './crypto';
+import { aad, open, sealedParts, unpadText, wipe } from './crypto';
 import { asBytes, asNumber, asString, type BackupDatabase } from './database';
 import type { KeyRing } from './keys';
 
@@ -52,8 +52,7 @@ function openText(key: Uint8Array | null, packed: Uint8Array | null, aadText: st
   if (!parts) return null;
   const padded = open(key, parts.nonce, parts.ciphertext, aadText);
   if (!padded) return null;
-  const plaintext = unpad(padded);
-  const text = plaintext ? new TextDecoder().decode(plaintext) : null;
+  const text = unpadText(padded);
   wipe(padded);
   return text;
 }

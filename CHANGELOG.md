@@ -13,6 +13,8 @@ Changes you can see in the YearWeGo Reader, newest first. Each released version 
 
 - Opens backups from the newest YearWeGo builds, which keep each encrypted value in one piece with what it needs to open. Backups from earlier builds open as before.
 
+- Shows each journey’s name in backups from the newest YearWeGo builds, where every name is encrypted under its journey’s own key. Names in earlier backups show as before.
+
 - Your passphrase opens a backup however you type the gaps between the words: spaces, long dashes, a full stop, or a line break, and with capitals, as the app accepts.
 
 - The browser tab shows the YearWeGo Y mark, the same icon as yearwego.com, in place of a plain green ring.

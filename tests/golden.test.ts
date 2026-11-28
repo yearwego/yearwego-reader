@@ -86,6 +86,10 @@ describe('the golden archive made by the app’s backup code', () => {
     expect(earlier!.closedAt).toBe(current!.createdAt);
   });
 
+  it('names each milestone’s journey from its sealed name', () => {
+    expect(backup.aims.map((aim) => aim.journeyName)).toEqual(['Running', 'Running']);
+  });
+
   it('rebuilds each day: intention, did you do it, and the answer', () => {
     expect(backup.days.map((day) => day.outcome)).toEqual(['waiting', 'no-answer', 'didnt', 'did-it']);
     const [today, unanswered, missed, done] = backup.days;
@@ -309,6 +313,12 @@ describe('a golden archive with counts (spec §10.6)', () => {
 
   it('passes every integrity check', () => {
     expect(backup.integrity.problems).toEqual([]);
+  });
+
+  it('opens the sealed journey name beside the counts, each under its own key', () => {
+    const [current] = backup.aims;
+    expect(backup.aims.map((aim) => aim.journeyName)).toEqual(['Running', 'Running']);
+    expect(current!.counts.every((count) => !count.unreadable)).toBe(true);
   });
 
   it('reads the half marathon’s counts: miles added up, and a mile time checked', () => {
