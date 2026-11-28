@@ -165,6 +165,13 @@ export const aad = {
     ].join('|'),
   legacyAudio: (recordingId: string, cryptoKeyId: string) =>
     `v1|recording.audio|${recordingId}|${cryptoKeyId}`,
+  measureName: (measureId: string) => `v1|measure.name|${measureId}`,
+  measureUnitLabel: (measureId: string) => `v1|measure.unit_label|${measureId}`,
+  measureEntryValue: (measureEntryId: string) => `v1|measure_entry.value|${measureEntryId}`,
+  milestoneMeasureTarget: (milestoneMeasureId: string) =>
+    `v1|milestone_measure.target_total|${milestoneMeasureId}`,
+  milestoneMeasureBaseline: (milestoneMeasureId: string) =>
+    `v1|milestone_measure.baseline|${milestoneMeasureId}`,
 };
 
 const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF]/g;

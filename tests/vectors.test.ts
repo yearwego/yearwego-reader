@@ -62,6 +62,25 @@ describe('known-answer vectors from the app (spec/vectors.json)', () => {
     expect(checksum(dek!)).toBe(row.checksum_hex);
   });
 
+  it('opens a count’s sealed name, value, and goal, and removes the padding', () => {
+    const count = v.count;
+    expect(aad.measureName(count.measure_id)).toBe(count.name.aad);
+    expect(aad.measureEntryValue(count.measure_entry_id)).toBe(count.value.aad);
+    expect(aad.milestoneMeasureTarget(count.milestone_measure_id)).toBe(count.target_total.aad);
+    for (const field of ['name', 'value', 'target_total'] as const) {
+      const vector = count[field];
+      const openCount = (aadText: string) => {
+        const parts = sealedParts(bytes(vector.packed_hex), null);
+        return parts && open(bytes(count.dek_hex), parts.nonce, parts.ciphertext, aadText);
+      };
+      const padded = openCount(vector.aad);
+      expect(padded && hex(padded)).toBe(vector.padded_hex);
+      expect(unpadText(padded!)).toBe(vector.text);
+      // Bound to its row: the same blob under another row's AAD doesn't open.
+      expect(openCount(`${vector.aad}x`)).toBeNull();
+    }
+  });
+
   it('decrypts a transcript', () => {
     const row = v.transcript;
     expect(aad.transcript(row.transcript_id)).toBe(row.aad);

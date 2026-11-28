@@ -1,3 +1,4 @@
+import { countLine, countValue } from "./counts";
 import type { DecryptedAudio } from "./audio";
 import type { Aim, Day, Entry, Outcome } from "./logbook";
 import type { IntegrityProblem } from "./manifest";
@@ -175,6 +176,19 @@ export function buildMarkdown(
       entryMarkdown(aim.entry, written.get(aim.entry.recordingId) ?? null),
       "",
     );
+    if (aim.counts.length > 0) {
+      out.push("Counts:", "");
+      for (const count of aim.counts) {
+        out.push(`- ${countLine(count)}`);
+        for (const entry of [...count.entries].reverse()) {
+          const amount = countValue(count, entry.value);
+          const sign = count.kind === "add" && entry.value >= 0 ? "+" : "";
+          const source = entry.fromCheckIn ? "at your check-in" : "added by hand";
+          out.push(`  - ${entry.day}: ${sign}${amount}, ${source}`);
+        }
+      }
+      out.push("");
+    }
   });
 
   out.push("## Days", "");
@@ -238,6 +252,24 @@ export function buildJson(
       whereYoureHeaded: source.aims.map((aim, index) => ({
         current: index === 0 && aim.closedAt === null,
         journey: aim.journeyName,
+        counts: aim.counts.map((count) => ({
+          name: count.name,
+          kind: count.kind === "add" ? "add-it" : "check-it",
+          format: count.format,
+          unit: count.unit,
+          unitWord: count.unitLabel,
+          goal: count.goal,
+          start: count.kind === "add" ? count.baseline : count.start,
+          startDay: count.baselineDay,
+          total: count.total,
+          shown: countLine(count),
+          entries: count.entries.map((entry) => ({
+            day: entry.day,
+            value: entry.value,
+            shown: countValue(count, entry.value),
+            atCheckIn: entry.fromCheckIn,
+          })),
+        })),
         setAt: iso(aim.createdAt),
         reachedAt: iso(aim.reachedAt),
         replacedAt: iso(aim.closedAt),

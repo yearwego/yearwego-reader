@@ -5059,7 +5059,12 @@ var aad = {
 		String(parts.chunkIndex),
 		parts.isFinal ? "final" : "more"
 	].join("|"),
-	legacyAudio: (recordingId, cryptoKeyId) => `v1|recording.audio|${recordingId}|${cryptoKeyId}`
+	legacyAudio: (recordingId, cryptoKeyId) => `v1|recording.audio|${recordingId}|${cryptoKeyId}`,
+	measureName: (measureId) => `v1|measure.name|${measureId}`,
+	measureUnitLabel: (measureId) => `v1|measure.unit_label|${measureId}`,
+	measureEntryValue: (measureEntryId) => `v1|measure_entry.value|${measureEntryId}`,
+	milestoneMeasureTarget: (milestoneMeasureId) => `v1|milestone_measure.target_total|${milestoneMeasureId}`,
+	milestoneMeasureBaseline: (milestoneMeasureId) => `v1|milestone_measure.baseline|${milestoneMeasureId}`
 };
 var INVISIBLE = /[\u200B-\u200D\u2060\uFEFF]/g;
 var NOT_A_LETTER = /[^a-z]+/g;
@@ -6406,6 +6411,176 @@ function asNumber(value) {
 function asBytes(value) {
 	return value instanceof Uint8Array ? value : null;
 }
+// src/core/counts.ts
+var FORMATS = /* @__PURE__ */ new Set([
+	"number",
+	"time",
+	"weight",
+	"distance",
+	"money",
+	"percent"
+]);
+function localDay(ms) {
+	const at = new Date(ms);
+	const pad = (n) => String(n).padStart(2, "0");
+	return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+}
+function openText(key, packed, aadText) {
+	if (!key) return null;
+	const parts = sealedParts(packed, null);
+	if (!parts) return null;
+	const padded = open(key, parts.nonce, parts.ciphertext, aadText);
+	if (!padded) return null;
+	const text = unpadText(padded);
+	wipe(padded);
+	return text;
+}
+function openNumber(key, packed, aadText) {
+	const text = openText(key, packed, aadText);
+	if (text === null || text.trim() === "") return null;
+	const value = Number(text);
+	return Number.isFinite(value) ? value : null;
+}
+/** Every milestone's counts, by milestone id. Empty for an archive from before counts. */
+function readCounts(db, keys, milestones, now = Date.now()) {
+	const result = /* @__PURE__ */ new Map();
+	if (!db.hasTable("measures") || !db.hasTable("milestone_measures") || !db.hasTable("measure_entries")) return result;
+	const entriesByMeasure = /* @__PURE__ */ new Map();
+	const keyOf = /* @__PURE__ */ new Map();
+	for (const row of db.all("SELECT id, crypto_key_id FROM measures")) {
+		const id = asString(row.id);
+		const keyId = asString(row.crypto_key_id);
+		if (id && keyId) keyOf.set(id, keyId);
+	}
+	for (const row of db.all("SELECT id, measure_id, encrypted_value, day, session_id, created_at FROM measure_entries ORDER BY day, created_at, id")) {
+		const id = asString(row.id) ?? "";
+		const measureId = asString(row.measure_id) ?? "";
+		const key = keys.dataKey(keyOf.get(measureId) ?? "");
+		const list = entriesByMeasure.get(measureId) ?? [];
+		list.push({
+			day: asString(row.day) ?? "",
+			createdAt: asNumber(row.created_at) ?? 0,
+			value: openNumber(key, asBytes(row.encrypted_value), aad.measureEntryValue(id)),
+			fromCheckIn: asString(row.session_id) !== null
+		});
+		entriesByMeasure.set(measureId, list);
+	}
+	const byId = new Map(milestones.map((milestone) => [milestone.id, milestone]));
+	for (const row of db.all(`SELECT mm.id AS id, mm.milestone_id AS milestone_id, mm.measure_id AS measure_id,
+            mm.aggregation AS aggregation, mm.encrypted_target_total AS encrypted_target_total,
+            mm.encrypted_baseline AS encrypted_baseline, mm.baseline_day AS baseline_day,
+            m.encrypted_name AS encrypted_name, m.format AS format, m.unit AS unit,
+            m.encrypted_unit_label AS encrypted_unit_label, m.crypto_key_id AS crypto_key_id
+     FROM milestone_measures mm JOIN measures m ON m.id = mm.measure_id
+     ORDER BY mm.position IS NULL, mm.position, mm.created_at, mm.id`)) {
+		const milestone = byId.get(asString(row.milestone_id) ?? "");
+		if (!milestone) continue;
+		const id = asString(row.id) ?? "";
+		const measureId = asString(row.measure_id) ?? "";
+		const key = keys.dataKey(asString(row.crypto_key_id) ?? "");
+		const name = openText(key, asBytes(row.encrypted_name), aad.measureName(measureId));
+		const labelBytes = asBytes(row.encrypted_unit_label);
+		const unitLabel = labelBytes ? openText(key, labelBytes, aad.measureUnitLabel(measureId)) : null;
+		const targetBytes = asBytes(row.encrypted_target_total);
+		const goal = targetBytes ? openNumber(key, targetBytes, aad.milestoneMeasureTarget(id)) : null;
+		const baselineBytes = asBytes(row.encrypted_baseline);
+		const baseline = baselineBytes ? openNumber(key, baselineBytes, aad.milestoneMeasureBaseline(id)) : null;
+		const baselineDay = baseline === null ? null : asString(row.baseline_day);
+		const from = baselineDay ?? localDay(milestone.createdAt);
+		const to = localDay(milestone.reachedAt ?? now);
+		const inWindow = (entriesByMeasure.get(measureId) ?? []).filter((entry) => entry.day >= from && entry.day <= to);
+		const entries = inWindow.flatMap((entry) => entry.value === null ? [] : [{
+			day: entry.day,
+			value: entry.value,
+			fromCheckIn: entry.fromCheckIn
+		}]);
+		const kind = asString(row.aggregation) === "latest" ? "check" : "add";
+		const format = asString(row.format) ?? "number";
+		let total;
+		let start = null;
+		if (kind === "add") total = (baseline ?? 0) + entries.reduce((sum, entry) => sum + entry.value, 0);
+		else {
+			start = baseline ?? entries[0]?.value ?? null;
+			total = entries.at(-1)?.value ?? baseline;
+		}
+		const list = result.get(milestone.id) ?? [];
+		list.push({
+			name,
+			kind,
+			format: FORMATS.has(format) ? format : "number",
+			unit: asString(row.unit),
+			unitLabel,
+			goal,
+			baseline,
+			baselineDay,
+			entries,
+			total,
+			start,
+			unreadable: name === null || labelBytes !== null && unitLabel === null || targetBytes !== null && goal === null || baselineBytes !== null && baseline === null || inWindow.some((entry) => entry.value === null)
+		});
+		result.set(milestone.id, list);
+	}
+	return result;
+}
+var GRAMS_PER = {
+	lb: 453.59237,
+	kg: 1e3
+};
+var MILLIMETERS_PER = {
+	mi: 1609344,
+	km: 1e6,
+	m: 1e3,
+	ft: 304.8,
+	in: 25.4,
+	cm: 10
+};
+function grouped(value) {
+	return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+}
+function duration(ms, kind) {
+	if (kind === "add") {
+		const minutes = Math.round(ms / 6e4);
+		const hours = Math.floor(minutes / 60);
+		if (hours === 0) return `${minutes}m`;
+		return minutes % 60 === 0 ? `${hours}h` : `${hours}h ${minutes % 60}m`;
+	}
+	const seconds = Math.round(ms / 1e3);
+	const hours = Math.floor(seconds / 3600);
+	const rest = String(seconds % 60).padStart(2, "0");
+	if (hours === 0) return `${Math.floor(seconds / 60)}:${rest}`;
+	return `${hours}:${String(Math.floor(seconds / 60) % 60).padStart(2, "0")}:${rest}`;
+}
+/** A value as the app shows it, with its unit. */
+function countValue(count, value) {
+	switch (count.format) {
+		case "time": return duration(value, count.kind);
+		case "weight": return `${grouped(value / (GRAMS_PER[count.unit ?? ""] ?? 1))} ${count.unit ?? "g"}`;
+		case "distance": return `${grouped(value / (MILLIMETERS_PER[count.unit ?? ""] ?? 1))} ${count.unit ?? "mm"}`;
+		case "money": try {
+			return new Intl.NumberFormat("en-US", {
+				style: "currency",
+				currency: count.unit ?? "USD",
+				minimumFractionDigits: Number.isInteger(value / 100) ? 0 : 2
+			}).format(value / 100);
+		} catch {
+			return `${grouped(value / 100)} ${count.unit ?? ""}`.trim();
+		}
+		case "percent": return `${grouped(value * 100)}%`;
+		default: return count.unitLabel ? `${grouped(value)} ${count.unitLabel}` : grouped(value);
+	}
+}
+/** One line for a count: “Books · 26 so far · goal 24”, “Mile time · 9:48 latest · started 11:22 ·
+*  goal 7:30”. */
+function countLine(count) {
+	const parts = [count.name ?? "A count that couldn’t be read"];
+	if (count.kind === "add") parts.push(`${countValue(count, count.total ?? 0)} so far`);
+	else {
+		parts.push(count.total === null ? "no reading yet" : `${countValue(count, count.total)} latest`);
+		if (count.start !== null) parts.push(`started ${countValue(count, count.start)}`);
+	}
+	if (count.goal !== null) parts.push(`goal ${countValue(count, count.goal)}`);
+	return parts.join(" · ");
+}
 // src/core/export.ts
 var OUTCOME_WORDS = {
 	"did-it": "Did it",
@@ -6536,6 +6711,19 @@ function buildMarkdown(source, written) {
 		const heading = [aimLabel(aim, index), aim.journeyName].filter(Boolean).join(" · ");
 		out.push(`### ${heading}`, "", `${status.join("; ")}.`, "");
 		out.push(entryMarkdown(aim.entry, written.get(aim.entry.recordingId) ?? null), "");
+		if (aim.counts.length > 0) {
+			out.push("Counts:", "");
+			for (const count of aim.counts) {
+				out.push(`- ${countLine(count)}`);
+				for (const entry of [...count.entries].reverse()) {
+					const amount = countValue(count, entry.value);
+					const sign = count.kind === "add" && entry.value >= 0 ? "+" : "";
+					const source = entry.fromCheckIn ? "at your check-in" : "added by hand";
+					out.push(`  - ${entry.day}: ${sign}${amount}, ${source}`);
+				}
+			}
+			out.push("");
+		}
 	});
 	out.push("## Days", "");
 	if (source.days.length === 0) out.push("_No days in this backup._", "");
@@ -6576,6 +6764,24 @@ function buildJson(source, written) {
 		whereYoureHeaded: source.aims.map((aim, index) => ({
 			current: index === 0 && aim.closedAt === null,
 			journey: aim.journeyName,
+			counts: aim.counts.map((count) => ({
+				name: count.name,
+				kind: count.kind === "add" ? "add-it" : "check-it",
+				format: count.format,
+				unit: count.unit,
+				unitWord: count.unitLabel,
+				goal: count.goal,
+				start: count.kind === "add" ? count.baseline : count.start,
+				startDay: count.baselineDay,
+				total: count.total,
+				shown: countLine(count),
+				entries: count.entries.map((entry) => ({
+					day: entry.day,
+					value: entry.value,
+					shown: countValue(count, entry.value),
+					atCheckIn: entry.fromCheckIn
+				}))
+			})),
 			setAt: iso(aim.createdAt),
 			reachedAt: iso(aim.reachedAt),
 			replacedAt: iso(aim.closedAt),
@@ -6897,7 +7103,7 @@ var LogbookBuilder = class {
 		const hasJourneys = journeyColumns !== null;
 		const journeyJoin = hasJourneys ? `LEFT JOIN journey_milestones jm ON jm.milestone_id = m.id
          LEFT JOIN journeys j ON j.id = jm.journey_id` : "";
-		const aims = this.db.all(`SELECT m.id AS milestone_id, m.created_at AS milestone_created_at, m.reached_at AS reached_at,
+		const rows = this.db.all(`SELECT m.id AS milestone_id, m.created_at AS milestone_created_at, m.reached_at AS reached_at,
               m.closed_at AS closed_at, ${this.db.column("milestones", "m", "focused_at", "focused_at")},
               ${journeyColumns ?? "NULL AS set_aside_at"}, ${entrySelect(this.db, this.withTranscripts)}
        FROM milestones m
@@ -6905,12 +7111,19 @@ var LogbookBuilder = class {
        JOIN sessions s ON s.id = r.session_id
        ${journeyJoin}
        ${this.transcriptJoin()}
-       ORDER BY m.created_at DESC, m.id DESC`).map((row) => ({
+       ORDER BY m.created_at DESC, m.id DESC`);
+		const counts = readCounts(this.db, this.keys, rows.map((row) => ({
+			id: asString(row.milestone_id) ?? "",
+			createdAt: asNumber(row.milestone_created_at) ?? 0,
+			reachedAt: asNumber(row.reached_at)
+		})));
+		const aims = rows.map((row) => ({
 			id: asString(row.milestone_id) ?? "",
 			createdAt: asNumber(row.milestone_created_at) ?? 0,
 			reachedAt: asNumber(row.reached_at),
 			closedAt: asNumber(row.closed_at),
 			journeyName: this.journeyNameFrom(row),
+			counts: counts.get(asString(row.milestone_id) ?? "") ?? [],
 			focusedAt: asNumber(row.focused_at),
 			setAside: asNumber(row.set_aside_at) !== null,
 			entry: this.entryFrom(row, "aim")
@@ -6945,6 +7158,7 @@ var LogbookBuilder = class {
 				reachedAt: asNumber(row.did_goal) === 1 ? asNumber(row.confirmed_at) : null,
 				closedAt: newer ? newer.createdAt : null,
 				journeyName: null,
+				counts: [],
 				entry
 			});
 		}
@@ -10127,6 +10341,14 @@ function wordsFor(entry, className = "words") {
 	if (entry.textProblem === "unreadable") return h("p", { class: "missing" }, "These words couldn’t be read.");
 	return h("p", { class: "missing" }, "Not transcribed. Play the recording to hear it.");
 }
+/** A milestone's counts, one line each. */
+function countsFor(aim) {
+	if (aim.counts.length === 0) return null;
+	return h("ul", {
+		class: "counts",
+		"aria-label": "Counts"
+	}, ...aim.counts.map((count) => h("li", {}, countLine(count))));
+}
 function currentAimCard(backup, aim) {
 	const label = h("h2", {
 		class: "aim-label",
@@ -10139,10 +10361,10 @@ function currentAimCard(backup, aim) {
 	return h("article", {
 		class: "aim-card",
 		"aria-labelledby": "aim-label"
-	}, label, aim.journeyName ? h("p", { class: "caption" }, aim.journeyName) : null, wordsFor(aim.entry), playerFor(backup, aim.entry, `where you’re headed, set ${longDate(aim.createdAt)}`));
+	}, label, aim.journeyName ? h("p", { class: "caption" }, aim.journeyName) : null, wordsFor(aim.entry), playerFor(backup, aim.entry, `where you’re headed, set ${longDate(aim.createdAt)}`), countsFor(aim));
 }
 function earlierAimCard(backup, aim) {
-	return h("article", { class: "entry-card" }, h("p", { class: "caption" }, aim.journeyName ? `${aim.journeyName} · ${shortDate(aim.createdAt)}` : `Where you were headed · ${shortDate(aim.createdAt)}`), wordsFor(aim.entry), playerFor(backup, aim.entry, `where you were headed, set ${longDate(aim.createdAt)}`), aim.reachedAt ? h("p", { class: "reached" }, `Reached ${shortDate(aim.reachedAt)}`) : null);
+	return h("article", { class: "entry-card" }, h("p", { class: "caption" }, aim.journeyName ? `${aim.journeyName} · ${shortDate(aim.createdAt)}` : `Where you were headed · ${shortDate(aim.createdAt)}`), wordsFor(aim.entry), playerFor(backup, aim.entry, `where you were headed, set ${longDate(aim.createdAt)}`), countsFor(aim), aim.reachedAt ? h("p", { class: "reached" }, `Reached ${shortDate(aim.reachedAt)}`) : null);
 }
 function followUpCaption(entry) {
 	if (entry.recordingType === "celebration") return "What you’re proud of";
@@ -11164,6 +11386,23 @@ button:disabled {
   font-size: 14px;
   font-weight: 600;
   color: var(--accent);
+}
+
+/* A milestone's counts (spec §10.6) */
+
+.counts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.counts li {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--dim);
 }
 
 /* Players */
